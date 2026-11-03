@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+    <title>Dual-Stick Space Survivor</title>
+    <link rel="stylesheet" href="css/style.css" />
+  </head>
+  <body>
+    <div id="app">
+      <canvas id="game"></canvas>
+
+      <div id="hud" class="hidden">
+        <div class="hud-left">
+          <div class="stat">
+            <span class="label">SCORE</span>
+            <span id="score">0</span>
+          </div>
+          <div class="stat">
+            <span class="label">COMBO</span>
+            <span id="combo">x1</span>
+          </div>
+        </div>
+        <div class="hud-center">
+          <div class="hp-wrap">
+            <div id="hp-bar"></div>
+          </div>
+          <div id="wave">ONDA 1</div>
+          <div id="objective">SOBREVIVA</div>
+        </div>
+        <div class="hud-right">
+          <div class="stat">
+            <span class="label">TEMPO</span>
+            <span id="time">0:00</span>
+          </div>
+          <div class="stat pad-status" id="pad-status">Controle: —</div>
+        </div>
+        <div id="boss-hud" class="hidden">
+          <div id="boss-name">BOSS</div>
+          <div class="hp-wrap boss">
+            <div id="boss-hp"></div>
+          </div>
+        </div>
+      </div>
+
+      <div id="combo-flash"></div>
+
+      <div id="overlay" class="overlay">
+        <div class="panel" data-view="title" id="view-title">
+          <p class="kicker">TWIN-STICK SHOOTER</p>
+          <h1>SPACE<br />SURVIVOR</h1>
+          <p class="subtitle">História com objetivos por fase, ou sobrevivência infinita com bosses.</p>
+
+          <label class="name-row">
+            Nome do piloto
+            <input id="pilot-name" type="text" maxlength="16" placeholder="Seu nome" autocomplete="off" />
+          </label>
+
+          <div class="btn-row">
+            <button id="btn-story" type="button">HISTÓRIA</button>
+            <button id="btn-survival" type="button">SOBREVIVÊNCIA</button>
+            <button id="btn-ranks" type="button" class="ghost">RANKING</button>
+          </div>
+
+          <p id="story-save" class="menu-pad"></p>
+
+          <div class="controls-grid">
+            <div>
+              <strong>DualShock 4</strong>
+              <ul>
+                <li>Analógico esquerdo — mover 360°</li>
+                <li>Analógico direito — mirar</li>
+                <li>R2 — atirar (ou empurre o direito)</li>
+                <li>Options — pausar</li>
+              </ul>
+            </div>
+            <div>
+              <strong>Teclado + mouse</strong>
+              <ul>
+                <li>WASD — mover</li>
+                <li>Mouse — mirar</li>
+                <li>Clique / Espaço — atirar</li>
+                <li>Esc — pausar</li>
+              </ul>
+            </div>
+          </div>
+          <p id="menu-pad" class="menu-pad">Conecte o DualShock 4 e aperte qualquer botão.</p>
+          <p class="hint">Clique na janela para o controle ser detectado. Progresso e ranking ficam neste navegador.</p>
+        </div>
+
+        <div class="panel hidden" data-view="brief" id="view-brief">
+          <p class="kicker" id="brief-kicker">FASE 1 / 8</p>
+          <h1 id="brief-title">Campo</h1>
+          <p class="subtitle" id="brief-text"></p>
+          <p class="objective-preview" id="brief-goal"></p>
+          <div class="btn-row">
+            <button id="btn-brief-go" type="button">DECOLAR</button>
+            <button id="btn-brief-back" type="button" class="ghost">VOLTAR</button>
+          </div>
+        </div>
+
+        <div class="panel hidden" data-view="ranks" id="view-ranks">
+          <p class="kicker">REGISTROS</p>
+          <h1>RANKING</h1>
+          <div class="ranks-grid">
+            <div>
+              <strong>Sobrevivência</strong>
+              <ol id="rank-survival"></ol>
+            </div>
+            <div>
+              <strong>História</strong>
+              <ol id="rank-story"></ol>
+            </div>
+          </div>
+          <button id="btn-ranks-back" type="button" class="ghost">VOLTAR</button>
+        </div>
+
+        <div class="panel hidden" data-view="pause" id="view-pause">
+          <p class="kicker">PAUSADO</p>
+          <h1>HOLD</h1>
+          <p class="subtitle">Options / Esc continua. O progresso da história já está salvo neste navegador.</p>
+          <div class="btn-row">
+            <button id="btn-resume" type="button">CONTINUAR</button>
+            <button id="btn-pause-save" type="button" class="ghost">SALVAR PROGRESSO</button>
+            <button id="btn-pause-menu" type="button" class="ghost">MENU</button>
+          </div>
+        </div>
+
+        <div class="panel hidden" data-view="over" id="view-over">
+          <p class="kicker">TRANSMISSÃO PERDIDA</p>
+          <h1>GAME OVER</h1>
+          <p class="subtitle" id="over-text"></p>
+          <label class="name-row">
+            Salvar no ranking como
+            <input id="over-name" type="text" maxlength="16" placeholder="Seu nome" autocomplete="off" />
+          </label>
+          <div class="btn-row">
+            <button id="btn-save-score" type="button">SALVAR PONTUAÇÃO</button>
+            <button id="btn-retry" type="button">TENTAR DE NOVO</button>
+            <button id="btn-over-menu" type="button" class="ghost">MENU</button>
+          </div>
+          <p id="save-msg" class="hint"></p>
+        </div>
+
+        <div class="panel hidden" data-view="clear" id="view-clear">
+          <p class="kicker">OBJETIVO CUMPRIDO</p>
+          <h1>FASE OK</h1>
+          <p class="subtitle" id="clear-text"></p>
+          <div class="btn-row">
+            <button id="btn-next" type="button">PRÓXIMA FASE</button>
+            <button id="btn-clear-menu" type="button" class="ghost">MENU (salva)</button>
+          </div>
+        </div>
+
+        <div class="panel hidden" data-view="win" id="view-win">
+          <p class="kicker">CAMPANHA</p>
+          <h1>VITÓRIA</h1>
+          <p class="subtitle" id="win-text"></p>
+          <label class="name-row">
+            Registrar como
+            <input id="win-name" type="text" maxlength="16" placeholder="Seu nome" autocomplete="off" />
+          </label>
+          <div class="btn-row">
+            <button id="btn-win-save" type="button">SALVAR RANKING</button>
+            <button id="btn-win-menu" type="button" class="ghost">MENU</button>
+          </div>
+          <p id="win-msg" class="hint"></p>
+        </div>
+      </div>
+    </div>
+
+    <script src="js/audio.js"></script>
+    <script src="js/input.js"></script>
+    <script src="js/entities.js"></script>
+    <script src="js/save.js"></script>
+    <script src="js/story.js"></script>
+    <script src="js/game.js"></script>
+    <script src="js/main.js"></script>
+  </body>
+</html>
