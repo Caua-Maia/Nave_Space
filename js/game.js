@@ -28,6 +28,8 @@ const Game = (() => {
   let pendingStage = 1;
   let scoreSaved = false;
   let lastBossWave = 0;
+  let surgeTimer = 14;
+  let diffTier = 1;
   const els = {};
 
   function data() {
@@ -88,13 +90,207 @@ const Game = (() => {
   function refreshTitle() {
     const s = data();
     els.pilotName.value = s.name;
-    if (s.story.cleared >= Story.stages.length) {
-      els.storySave.textContent = `${s.name || "Piloto"} · campanha completa · recorde local salvo`;
+    const sess = s.session;
+    if (sess) {
+      els.btnContinue.classList.remove("hidden");
+      const extra =
+        sess.mode === "story"
+          ? `fase ${sess.stageId} · ${formatTime(sess.elapsed)}`
+          : `onda ${sess.wave} · score ${sess.score.toLocaleString("pt-BR")}`;
+      els.storySave.textContent = `Partida salva (${extra}). CONTINUAR retoma de onde parou.`;
     } else {
-      els.storySave.textContent = s.name
-        ? `${s.name} · história na fase ${s.story.nextStage} / ${Story.stages.length} · score campanha ${s.story.campaignScore.toLocaleString("pt-BR")}`
-        : "Digite um nome para gravar ranking e progresso da história.";
+      els.btnContinue.classList.add("hidden");
+      if (s.story.cleared >= Story.stages.length) {
+        els.storySave.textContent = `${s.name || "Piloto"} · campanha completa · recorde local salvo`;
+      } else {
+        els.storySave.textContent = s.name
+          ? `${s.name} · história na fase ${s.story.nextStage} / ${Story.stages.length} · score campanha ${s.story.campaignScore.toLocaleString("pt-BR")}`
+          : "Digite um nome para gravar ranking e progresso da história.";
+      }
     }
+  }
+
+  function fx(v) {
+    return v / Math.max(1, w);
+  }
+  function ux(f) {
+    return f * w;
+  }
+  function fy(v) {
+    return v / Math.max(1, h);
+  }
+  function uy(f) {
+    return f * h;
+  }
+
+  function buildSessionSnapshot() {
+    return {
+      v: 2,
+      cw: w,
+      ch: h,
+      mode,
+      stageId,
+      score,
+      stageScore,
+      stageStartScore,
+      combo,
+      comboTime,
+      wave,
+      elapsed,
+      bossPhase,
+      stageDone,
+      lastBossWave,
+      spawnRock,
+      spawnEnemy,
+      spawnHeal,
+      surgeTimer,
+      diffTier,
+      player: {
+        x: fx(player.x),
+        y: fy(player.y),
+        vx: player.vx,
+        vy: player.vy,
+        hp: player.hp,
+        aim: player.aim,
+        rapid: player.rapid,
+        shield: player.shield,
+        multi: player.multi,
+        cool: player.cool,
+        iframes: player.iframes,
+      },
+      rocks: rocks.map((r) => ({
+        x: fx(r.x),
+        y: fy(r.y),
+        size: r.size,
+        vx: r.vx,
+        vy: r.vy,
+        hp: r.hp,
+        rot: r.rot,
+        spin: r.spin,
+      })),
+      enemies: enemies.map((e) => ({
+        x: fx(e.x),
+        y: fy(e.y),
+        type: e.type,
+        hp: e.hp,
+        angle: e.angle,
+        cool: e.cool,
+        speed: e.speed,
+      })),
+      bosses: bosses.map((b) => ({
+        x: fx(b.x),
+        y: fy(b.y),
+        kind: b.kind,
+        hp: b.hp,
+        angle: b.angle,
+        cool: b.cool,
+        t: b.t,
+      })),
+      bullets: bullets.map((b) => ({
+        x: fx(b.x),
+        y: fy(b.y),
+        vx: b.vx,
+        vy: b.vy,
+        fromPlayer: b.fromPlayer,
+        color: b.color,
+        dmg: b.dmg,
+        life: b.life,
+        r: b.r,
+      })),
+      powers: powers.map((p) => ({ x: fx(p.x), y: fy(p.y), type: p.type, life: p.life })),
+    };
+  }
+
+  function applySessionSnapshot(s) {
+    mode = s.mode;
+    stageId = s.stageId;
+    score = s.score;
+    stageScore = s.stageScore;
+    stageStartScore = s.stageStartScore;
+    combo = s.combo;
+    comboTime = s.comboTime;
+    wave = s.wave;
+    elapsed = s.elapsed;
+    bossPhase = s.bossPhase;
+    stageDone = s.stageDone;
+    lastBossWave = s.lastBossWave;
+    spawnRock = s.spawnRock;
+    spawnEnemy = s.spawnEnemy;
+    spawnHeal = s.spawnHeal;
+    surgeTimer = s.surgeTimer ?? 14;
+    diffTier = s.diffTier ?? 1;
+
+    player = new Player(ux(s.player.x), uy(s.player.y));
+    Object.assign(player, {
+      vx: s.player.vx,
+      vy: s.player.vy,
+      hp: s.player.hp,
+      aim: s.player.aim,
+      rapid: s.player.rapid,
+      shield: s.player.shield,
+      multi: s.player.multi,
+      cool: s.player.cool,
+      iframes: s.player.iframes,
+    });
+
+    rocks = s.rocks.map((r) => {
+      const a = new Asteroid(ux(r.x), uy(r.y), r.size, r.vx, r.vy);
+      a.hp = r.hp;
+      a.rot = r.rot;
+      a.spin = r.spin;
+      return a;
+    });
+    enemies = s.enemies.map((e) => {
+      const en = new Enemy(ux(e.x), uy(e.y), e.type, 1);
+      en.hp = e.hp;
+      en.angle = e.angle;
+      en.cool = e.cool;
+      en.speed = e.speed;
+      return en;
+    });
+    bosses = s.bosses.map((b) => {
+      const boss = new Boss(ux(b.x), uy(b.y), b.kind);
+      boss.hp = b.hp;
+      boss.angle = b.angle;
+      boss.cool = b.cool;
+      boss.t = b.t;
+      return boss;
+    });
+    bullets = s.bullets.map((b) => {
+      const ang = Math.atan2(b.vy, b.vx);
+      const spd = Math.hypot(b.vx, b.vy);
+      const bullet = new Bullet(ux(b.x), uy(b.y), ang, spd, b.fromPlayer, b.color, b.dmg);
+      bullet.life = b.life;
+      bullet.r = b.r;
+      return bullet;
+    });
+    powers = s.powers.map((p) => {
+      const pu = new PowerUp(ux(p.x), uy(p.y), p.type);
+      pu.life = p.life;
+      return pu;
+    });
+    particles = [];
+  }
+
+  function saveRunSession() {
+    if (state !== "play" && state !== "pause") return false;
+    commitName(els.pilotName.value || data().name);
+    Save.saveSession(buildSessionSnapshot());
+    if (mode === "story") {
+      persistStory({ nextStage: stageId, campaignScore: score });
+    }
+    refreshTitle();
+    return true;
+  }
+
+  function continueSavedRun() {
+    const s = data().session;
+    if (!s) return;
+    AudioFx.resume();
+    applySessionSnapshot(s);
+    state = "play";
+    hideOverlay();
+    els.hud.classList.remove("hidden");
   }
 
   function fillRanks() {
@@ -110,9 +306,33 @@ const Game = (() => {
 
   function caps() {
     const bossHere = bosses.length > 0;
+    if (mode === "survival") {
+      const d = survivalDifficulty();
+      return {
+        rockMax: bossHere ? Math.max(4, d.rockMax - 3) : d.rockMax,
+        enemyMax: bossHere ? Math.max(2, d.enemyMax - 2) : d.enemyMax,
+      };
+    }
     const rockMax = bossHere ? 6 : Math.min(12, 6 + Math.floor(wave / 3));
     const enemyMax = bossHere ? 3 : Math.min(7, 3 + Math.floor(wave / 4));
     return { rockMax, enemyMax };
+  }
+
+  function survivalDifficulty() {
+    const jitter = 0.88 + Math.random() * 0.28;
+    const scale = 1 + wave * 0.045 + elapsed * 0.0055;
+    diffTier = Math.floor(scale);
+    return {
+      scale,
+      jitter,
+      rockRate: Math.max(0.28, 2.35 - wave * 0.022 - elapsed * 0.0018) * jitter,
+      enemyRate: Math.max(0.42, 6.1 - wave * 0.026 - elapsed * 0.0022) * jitter,
+      rockMax: Math.min(22, 6 + Math.floor(wave * 0.14 + elapsed / 45)),
+      enemyMax: Math.min(16, 4 + Math.floor(wave * 0.11 + elapsed / 55)),
+      rockSpeed: 38 + wave * 3.2 + elapsed * 0.09,
+      shooterChance: Math.min(0.78, 0.22 + wave * 0.005 + elapsed * 0.0009),
+      healInterval: Math.max(8, 18 - wave * 0.06),
+    };
   }
 
   function spawnBoss(kind) {
@@ -151,6 +371,8 @@ const Game = (() => {
     shake = 0;
     bossPhase = false;
     stageDone = false;
+    surgeTimer = 14;
+    diffTier = 1;
     const n = mode === "story" ? 3 : 4;
     for (let i = 0; i < n; i++) {
       const p = spawnEdge(w, h, 80);
@@ -158,9 +380,18 @@ const Game = (() => {
     }
   }
 
-  function startSurvival() {
+  function startSurvival(forceNew) {
     AudioFx.resume();
     commitName(els.pilotName.value);
+    if (!forceNew && Save.hasSession() && data().session?.mode === "survival") {
+      continueSavedRun();
+      return;
+    }
+    if (Save.hasSession() && !forceNew) {
+      const ok = window.confirm("Iniciar nova sobrevivência? A partida salva será apagada.");
+      if (!ok) return;
+    }
+    Save.clearSession();
     mode = "survival";
     score = 0;
     stageStartScore = 0;
@@ -169,6 +400,7 @@ const Game = (() => {
     state = "play";
     hideOverlay();
     els.hud.classList.remove("hidden");
+    refreshTitle();
   }
 
   function openStoryBrief() {
@@ -188,6 +420,7 @@ const Game = (() => {
   }
 
   function startStoryStage(id) {
+    Save.clearSession();
     mode = "story";
     stageId = id;
     const s = data();
@@ -224,6 +457,8 @@ const Game = (() => {
 
   function gameOver() {
     state = "dead";
+    Save.clearSession();
+    refreshTitle();
     AudioFx.lose();
     rumble(280, 0.7);
     scoreSaved = false;
@@ -301,16 +536,35 @@ const Game = (() => {
     if (mode !== "survival") return;
     if (bosses.length) return;
     if (wave < 3) return;
-    const miniEvery = 4;
-    const bossEvery = 8;
-    const atMini = wave % miniEvery === 0 && wave % bossEvery !== 0;
-    const atBoss = wave % bossEvery === 0;
-    if (!atMini && !atBoss) return;
-    const already = bosses.length;
-    if (already) return;
     if (wave === lastBossWave) return;
+    const atBoss = wave % 8 === 0;
+    const atMini = wave % 4 === 0;
+    const chaos = wave > 20 && Math.random() < 0.12;
+    if (!atBoss && !atMini && !chaos) return;
     lastBossWave = wave;
-    spawnBoss(atBoss ? (wave >= 16 ? "core" : "cruiser") : wave >= 8 ? "mini_hunter" : "mini_rock");
+    let kind = "mini_rock";
+    if (atBoss) {
+      if (wave >= 48) kind = "core";
+      else if (wave >= 24) kind = "cruiser";
+      else kind = "mini_hunter";
+    } else if (wave >= 12) kind = Math.random() < 0.55 ? "mini_hunter" : "mini_rock";
+    if (chaos && wave >= 30) kind = Math.random() < 0.35 ? "cruiser" : kind;
+    spawnBoss(kind);
+  }
+
+  function survivalSurge() {
+    const d = survivalDifficulty();
+    const n = 2 + Math.floor(Math.random() * 3) + Math.floor(wave / 15);
+    for (let i = 0; i < n; i++) {
+      const p = spawnEdge(w, h);
+      const type = Math.random() < d.shooterChance ? "shooter" : "chaser";
+      enemies.push(new Enemy(p.x, p.y, type, d.scale));
+    }
+    els.flash.textContent = "SURTO!";
+    els.flash.style.opacity = "1";
+    setTimeout(() => {
+      els.flash.style.opacity = "0";
+    }, 500);
   }
 
   function spawnWaveStuff(dt) {
@@ -318,30 +572,51 @@ const Game = (() => {
     spawnEnemy -= dt;
     spawnHeal -= dt;
     const { rockMax, enemyMax } = caps();
-    const rockRate = Math.max(1.15, 2.4 - elapsed * 0.012);
-    const enemyRate = Math.max(2.1, 6.2 - elapsed * 0.018);
+    const surv = mode === "survival" ? survivalDifficulty() : null;
+    const rockRate = surv ? surv.rockRate : Math.max(1.15, 2.4 - elapsed * 0.012);
+    const enemyRate = surv ? surv.enemyRate : Math.max(2.1, 6.2 - elapsed * 0.018);
     if (spawnRock <= 0 && rocks.length < rockMax) {
-      spawnRock = rockRate;
+      spawnRock = rockRate * (0.92 + Math.random() * 0.16);
       const p = spawnEdge(w, h);
-      const size = Math.random() < 0.45 ? 3 : Math.random() < 0.75 ? 2 : 1;
-      const toward = Math.atan2(player.y - p.y, player.x - p.x) + rand(-0.5, 0.5);
-      const spd = 36 + Math.min(wave, 12) * 5;
+      const size =
+        mode === "survival" && wave > 8 && Math.random() < 0.35 + wave * 0.002
+          ? 3
+          : Math.random() < 0.45
+            ? 3
+            : Math.random() < 0.75
+              ? 2
+              : 1;
+      const toward = Math.atan2(player.y - p.y, player.x - p.x) + rand(-0.55, 0.55);
+      const spd = surv ? surv.rockSpeed * (0.9 + Math.random() * 0.25) : 36 + Math.min(wave, 12) * 5;
       rocks.push(new Asteroid(p.x, p.y, size, Math.cos(toward) * spd, Math.sin(toward) * spd));
     }
     const enemyStart = mode === "story" && Story.get(stageId).type === "boss" ? 1.2 : 7;
     if (elapsed > enemyStart && spawnEnemy <= 0 && enemies.length < enemyMax) {
-      spawnEnemy = enemyRate;
+      spawnEnemy = enemyRate * (0.9 + Math.random() * 0.2);
       const p = spawnEdge(w, h);
-      const type = elapsed > 22 && Math.random() < 0.38 ? "shooter" : "chaser";
-      enemies.push(new Enemy(p.x, p.y, type));
+      const shootChance = surv ? surv.shooterChance : elapsed > 22 ? 0.38 : 0.22;
+      const type = Math.random() < shootChance ? "shooter" : "chaser";
+      enemies.push(new Enemy(p.x, p.y, type, surv ? surv.scale : 1));
     }
     if (spawnHeal <= 0 && player.hp < player.maxHp) {
-      spawnHeal = player.hp < 40 ? 11 : 17;
-      const p = spawnEdge(w, h, 60);
-      dropHeal(Math.max(80, Math.min(w - 80, p.x)), Math.max(80, Math.min(h - 80, p.y)));
+      const healWait = surv ? surv.healInterval : player.hp < 40 ? 11 : 17;
+      spawnHeal = healWait + rand(0, 4);
+      if (wave < 25 || Math.random() < 0.65) {
+        const p = spawnEdge(w, h, 60);
+        dropHeal(Math.max(80, Math.min(w - 80, p.x)), Math.max(80, Math.min(h - 80, p.y)));
+      }
     }
 
-    const newWave = 1 + Math.floor(elapsed / 22);
+    if (mode === "survival") {
+      surgeTimer -= dt;
+      if (surgeTimer <= 0) {
+        surgeTimer = Math.max(8, 22 - wave * 0.08 - diffTier * 0.15) * (0.75 + Math.random() * 0.5);
+        if (wave >= 5) survivalSurge();
+      }
+    }
+
+    const waveLen = mode === "survival" ? Math.max(14, 22 - Math.floor(wave / 12)) : 22;
+    const newWave = 1 + Math.floor(elapsed / waveLen);
     if (newWave !== wave) {
       wave = newWave;
       if (mode === "survival") maybeSpawnSurvivalBoss();
@@ -572,8 +847,10 @@ const Game = (() => {
         bossName: bosses[0] && bosses[0].name,
       });
     } else {
-      els.wave.textContent = `ONDA ${wave}`;
-      els.objective.textContent = bosses.length ? `BOSS: ${bosses[0].name}` : "SOBREVIVA · pegue + para curar";
+      els.wave.textContent = `ONDA ${wave} · T${diffTier}`;
+      els.objective.textContent = bosses.length
+        ? `BOSS: ${bosses[0].name}`
+        : `PRESSÃO ${(1 + wave * 0.045 + elapsed * 0.0055).toFixed(1)} · + cura · surtos`;
     }
     els.pad.textContent = Input.status();
     if (bosses[0]) {
@@ -646,7 +923,8 @@ const Game = (() => {
       state = "brief";
       openStoryBrief();
     });
-    els.btnSurvival.addEventListener("click", startSurvival);
+    els.btnSurvival.addEventListener("click", () => startSurvival(true));
+    els.btnContinue.addEventListener("click", continueSavedRun);
     els.btnRanks.addEventListener("click", () => {
       fillRanks();
       state = "ranks";
@@ -657,16 +935,16 @@ const Game = (() => {
     els.btnBriefBack.addEventListener("click", goMenu);
     els.btnResume.addEventListener("click", pauseToggle);
     els.btnPauseSave.addEventListener("click", () => {
-      commitName(els.pilotName.value || data().name);
-      if (mode === "story") persistStory({ nextStage: stageId, campaignScore: score });
-      els.flash.textContent = "SALVO";
-      els.flash.style.opacity = "1";
-      setTimeout(() => {
-        els.flash.style.opacity = "0";
-      }, 500);
+      if (saveRunSession()) {
+        els.flash.textContent = "SALVO";
+        els.flash.style.opacity = "1";
+        setTimeout(() => {
+          els.flash.style.opacity = "0";
+        }, 500);
+      }
     });
     els.btnPauseMenu.addEventListener("click", () => {
-      if (mode === "story") persistStory({ nextStage: stageId, campaignScore: score });
+      saveRunSession();
       goMenu();
     });
     els.btnSaveScore.addEventListener("click", () => {
@@ -722,6 +1000,7 @@ const Game = (() => {
     els.storySave = document.getElementById("story-save");
     els.btnStory = document.getElementById("btn-story");
     els.btnSurvival = document.getElementById("btn-survival");
+    els.btnContinue = document.getElementById("btn-continue");
     els.btnRanks = document.getElementById("btn-ranks");
     els.briefKicker = document.getElementById("brief-kicker");
     els.briefTitle = document.getElementById("brief-title");

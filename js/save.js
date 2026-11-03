@@ -1,5 +1,5 @@
 const Save = (() => {
-  const KEY = "space-survivor-save-v1";
+  const KEY = "space-survivor-save-v2";
   const MAX_BOARD = 10;
 
   function blank() {
@@ -8,12 +8,16 @@ const Save = (() => {
       story: { nextStage: 1, campaignScore: 0, cleared: 0 },
       survivalBoard: [],
       storyBoard: [],
+      session: null,
     };
   }
 
   function load() {
     try {
-      const raw = localStorage.getItem(KEY);
+      let raw = localStorage.getItem(KEY);
+      if (!raw) {
+        raw = localStorage.getItem("space-survivor-save-v1");
+      }
       if (!raw) return blank();
       const data = JSON.parse(raw);
       const base = blank();
@@ -22,6 +26,7 @@ const Save = (() => {
         story: { ...base.story, ...(data.story || {}) },
         survivalBoard: Array.isArray(data.survivalBoard) ? data.survivalBoard : [],
         storyBoard: Array.isArray(data.storyBoard) ? data.storyBoard : [],
+        session: data.session && data.session.v === 2 ? data.session : null,
       };
     } catch {
       return blank();
@@ -47,6 +52,22 @@ const Save = (() => {
     write(data);
   }
 
+  function saveSession(session) {
+    const data = load();
+    data.session = session;
+    write(data);
+  }
+
+  function clearSession() {
+    const data = load();
+    data.session = null;
+    write(data);
+  }
+
+  function hasSession() {
+    return !!load().session;
+  }
+
   function pushBoard(kind, entry) {
     const data = load();
     const list = kind === "story" ? data.storyBoard : data.survivalBoard;
@@ -64,5 +85,5 @@ const Save = (() => {
     return trimmed;
   }
 
-  return { load, setName, saveStory, pushBoard };
+  return { load, setName, saveStory, saveSession, clearSession, hasSession, pushBoard };
 })();

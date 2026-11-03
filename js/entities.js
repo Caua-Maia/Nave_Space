@@ -288,16 +288,18 @@ class Boss {
 }
 
 class Enemy {
-  constructor(x, y, type) {
+  constructor(x, y, type, scale = 1) {
     this.x = x;
     this.y = y;
     this.type = type;
     this.r = type === "shooter" ? 16 : 14;
-    this.hp = type === "shooter" ? 3 : 2;
+    const bonus = Math.max(0, Math.floor(scale - 1));
+    this.hp = (type === "shooter" ? 3 : 2) + bonus;
     this.angle = 0;
     this.cool = rand(0.4, 1.4);
     this.kind = "enemy";
-    this.speed = type === "chaser" ? rand(95, 140) : rand(55, 85);
+    const sm = 1 + Math.min(2.2, (scale - 1) * 0.14);
+    this.speed = (type === "chaser" ? rand(95, 140) : rand(55, 85)) * sm;
   }
   update(dt, w, h, player, bullets) {
     const dx = player.x - this.x;

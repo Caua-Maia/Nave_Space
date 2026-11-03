@@ -189,8 +189,8 @@ body {
   text-align: center;
 }
 
-.panel.hidden {
-  display: none;
+.hidden {
+  display: none !important;
 }
 
 .name-row {
