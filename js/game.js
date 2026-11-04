@@ -76,15 +76,23 @@ const Game = (() => {
     }
   }
 
+  function syncMenuPointer() {
+    if (!canvas || !els.overlay) return;
+    const menuOpen = !els.overlay.classList.contains("hidden");
+    canvas.style.pointerEvents = menuOpen ? "none" : "auto";
+  }
+
   function showView(name) {
     document.querySelectorAll(".panel").forEach((p) => {
       p.classList.toggle("hidden", p.dataset.view !== name);
     });
     els.overlay.classList.remove("hidden");
+    syncMenuPointer();
   }
 
   function hideOverlay() {
     els.overlay.classList.add("hidden");
+    syncMenuPointer();
   }
 
   function refreshTitle() {
@@ -286,11 +294,19 @@ const Game = (() => {
   function continueSavedRun() {
     const s = data().session;
     if (!s) return;
-    AudioFx.resume();
-    applySessionSnapshot(s);
-    state = "play";
-    hideOverlay();
-    els.hud.classList.remove("hidden");
+    try {
+      AudioFx.resume();
+      applySessionSnapshot(s);
+      state = "play";
+      hideOverlay();
+      els.hud.classList.remove("hidden");
+    } catch (err) {
+      console.error(err);
+      Save.clearSession();
+      refreshTitle();
+      alert("Save corrompido — removido. Escolha História ou Sobrevivência.");
+      goMenu();
+    }
   }
 
   function fillRanks() {
@@ -1039,6 +1055,7 @@ const Game = (() => {
     bind();
     refreshTitle();
     showView("title");
+    syncMenuPointer();
     requestAnimationFrame(loop);
   }
 
