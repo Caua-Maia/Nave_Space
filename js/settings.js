@@ -26,6 +26,7 @@ const Settings = (() => {
     AudioFx.setVolume(opt.volume);
     AudioFx.setMusic(opt.music);
     document.body.dataset.stickSize = opt.stickSize;
+    document.body.dataset.touchMode = opt.touchMode || "fixed";
     document.querySelectorAll("[data-layout]").forEach((el) => {
       place(el, opt.layout[el.dataset.layout]);
     });
@@ -38,6 +39,7 @@ const Settings = (() => {
       music: document.getElementById("opt-music").checked,
       vibrate: document.getElementById("opt-vibrate").checked,
       stickSize: document.getElementById("opt-stick-size").value,
+      touchMode: document.getElementById("opt-touch-mode").value,
       layout: prev.layout,
     });
   }
@@ -49,6 +51,7 @@ const Settings = (() => {
     document.getElementById("opt-music").checked = opt.music;
     document.getElementById("opt-vibrate").checked = opt.vibrate;
     document.getElementById("opt-stick-size").value = opt.stickSize;
+    document.getElementById("opt-touch-mode").value = opt.touchMode || "fixed";
   }
 
   function onChange() {

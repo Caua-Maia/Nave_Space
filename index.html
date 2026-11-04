@@ -11,7 +11,7 @@
     <link rel="manifest" href="manifest.json" />
     <link rel="icon" href="icons/icon-192.png" />
     <link rel="apple-touch-icon" href="icons/icon-192.png" />
-    <link rel="stylesheet" href="css/style.css?v=12" />
+    <link rel="stylesheet" href="css/style.css?v=13" />
   </head>
   <body>
     <div id="app">
@@ -59,6 +59,9 @@
 
       <div id="overlay" class="overlay">
         <div class="panel splash" data-view="splash" id="view-splash">
+          <svg class="splash-mark" viewBox="0 0 64 64" aria-hidden="true">
+            <polygon points="32,8 52,50 32,40 12,50" />
+          </svg>
           <p class="kicker">DUAL-STICK</p>
           <h1>SPACE<br />SURVIVOR</h1>
           <p class="subtitle">Formas no escuro. Mire, dispare e não pare.</p>
@@ -115,16 +118,18 @@
             <div>
               <strong>Celular</strong>
               <ul>
-                <li>Analógico esquerdo — mover</li>
-                <li>Analógico direito — mirar e atirar</li>
-                <li>Pausa fica na tela</li>
-                <li>Configurações arrasta o HUD</li>
+                <li>Fixo, segue o dedo, ou metade da tela</li>
+                <li>Esquerda anda, direita mira e atira</li>
+                <li>O jeito muda em Configurações</li>
+                <li>O HUD também pode ser arrastado</li>
               </ul>
             </div>
           </div>
           <p id="menu-pad" class="menu-pad">Conecte o DualShock 4 e aperte qualquer botão.</p>
           <p class="hint">Clique na janela para o controle ser detectado. Progresso e ranking ficam neste navegador.</p>
-          <button id="btn-help-back" type="button" class="ghost">VOLTAR</button>
+          <div class="btn-row">
+            <button id="btn-help-back" type="button" class="ghost">VOLTAR</button>
+          </div>
         </div>
 
         <div class="panel hidden" data-view="ships" id="view-ships">
@@ -182,6 +187,14 @@
                 <option value="p">Pequeno</option>
                 <option value="m">Médio</option>
                 <option value="g">Grande</option>
+              </select>
+            </label>
+            <label>
+              Controle no celular
+              <select id="opt-touch-mode">
+                <option value="fixed">Analógicos fixos</option>
+                <option value="follow">Analógico segue o dedo</option>
+                <option value="split">Metade anda, metade mira</option>
               </select>
             </label>
           </div>
@@ -249,15 +262,15 @@
       </div>
     </div>
 
-    <script src="js/audio.js?v=12"></script>
-    <script src="js/input.js?v=12"></script>
-    <script src="js/touch.js?v=12"></script>
-    <script src="js/entities.js?v=12"></script>
-    <script src="js/save.js?v=12"></script>
-    <script src="js/settings.js?v=12"></script>
-    <script src="js/story.js?v=12"></script>
-    <script src="js/game.js?v=12"></script>
-    <script src="js/main.js?v=12"></script>
+    <script src="js/audio.js?v=13"></script>
+    <script src="js/input.js?v=13"></script>
+    <script src="js/touch.js?v=13"></script>
+    <script src="js/entities.js?v=13"></script>
+    <script src="js/save.js?v=13"></script>
+    <script src="js/settings.js?v=13"></script>
+    <script src="js/story.js?v=13"></script>
+    <script src="js/game.js?v=13"></script>
+    <script src="js/main.js?v=13"></script>
     <script>
       if ("serviceWorker" in navigator) {
         navigator.serviceWorker.register("sw.js", { updateViaCache: "none" });

@@ -3,6 +3,7 @@ const TouchControls = (() => {
   const zero = { x: 0, y: 0, mag: 0 };
   const axes = { left: { ...zero }, right: { ...zero }, shoot: false };
   const pointers = { left: null, right: null };
+  const floats = { left: null, right: null };
   let root = null;
   let fsBtn = null;
   let pauseEdge = false;
@@ -69,6 +70,79 @@ const TouchControls = (() => {
     if (base) base.setAttribute("aria-valuenow", axes[which].mag.toFixed(2));
   }
 
+  function touchMode() {
+    if (typeof Save === "undefined") return "fixed";
+    const mode = Save.load().options.touchMode;
+    return mode === "follow" || mode === "split" ? mode : "fixed";
+  }
+
+  function vectorFrom(which, event, originX, originY, max) {
+    const dx = event.clientX - originX;
+    const dy = event.clientY - originY;
+    const dist = Math.hypot(dx, dy) || 1;
+    const clamped = Math.min(dist, max);
+    const nx = dx / dist;
+    const ny = dy / dist;
+    const raw = clamped / max;
+    if (raw < DEAD) {
+      axes[which] = { x: 0, y: 0, mag: 0 };
+    } else {
+      const t = Math.min(1, (raw - DEAD) / (1 - DEAD));
+      axes[which] = { x: nx * t, y: ny * t, mag: t };
+    }
+    if (which === "right") axes.shoot = axes.right.mag > 0.45;
+    if (touchMode() === "follow") placeKnob(which, nx, ny, clamped);
+  }
+
+  function showFloat(which, x, y) {
+    const el = baseOf(which);
+    if (!el) return;
+    const box = root.getBoundingClientRect();
+    el.classList.add("live");
+    el.style.left = x - box.left - el.offsetWidth / 2 + "px";
+    el.style.top = y - box.top - el.offsetHeight / 2 + "px";
+    el.style.right = "auto";
+    el.style.bottom = "auto";
+  }
+
+  function clearFloat(which) {
+    floats[which] = null;
+    resetStick(which);
+    const el = baseOf(which);
+    if (el) el.classList.remove("live");
+    if (typeof Settings !== "undefined") Settings.apply();
+  }
+
+  function onSurfaceDown(event) {
+    if (touchMode() === "fixed" || document.body.classList.contains("hud-edit")) return;
+    if (event.target.closest("#touch-pause, #btn-fullscreen")) return;
+    const box = root.getBoundingClientRect();
+    const which = event.clientX < box.left + box.width / 2 ? "left" : "right";
+    if (floats[which]) return;
+    floats[which] = { id: event.pointerId, x: event.clientX, y: event.clientY };
+    try {
+      root.setPointerCapture(event.pointerId);
+    } catch (err) {}
+    event.preventDefault();
+    if (touchMode() === "follow") showFloat(which, event.clientX, event.clientY);
+    vectorFrom(which, event, event.clientX, event.clientY, 70);
+  }
+
+  function onSurfaceMove(event) {
+    ["left", "right"].forEach((which) => {
+      const spot = floats[which];
+      if (!spot || spot.id !== event.pointerId) return;
+      event.preventDefault();
+      vectorFrom(which, event, spot.x, spot.y, 70);
+    });
+  }
+
+  function onSurfaceEnd(event) {
+    ["left", "right"].forEach((which) => {
+      if (floats[which] && floats[which].id === event.pointerId) clearFloat(which);
+    });
+  }
+
   function bindStick(el) {
     const which = el.dataset.stick;
     el.addEventListener("pointerdown", (event) => {
@@ -112,6 +186,10 @@ const TouchControls = (() => {
       pauseEdge = true;
     });
     root.addEventListener("contextmenu", (event) => event.preventDefault());
+    root.addEventListener("pointerdown", onSurfaceDown);
+    root.addEventListener("pointermove", onSurfaceMove);
+    root.addEventListener("pointerup", onSurfaceEnd);
+    root.addEventListener("pointercancel", onSurfaceEnd);
 
     fsBtn = document.createElement("button");
     fsBtn.id = "btn-fullscreen";
@@ -222,6 +300,8 @@ const TouchControls = (() => {
     if (!show) {
       pointers.left = null;
       pointers.right = null;
+      floats.left = null;
+      floats.right = null;
       resetStick("left");
       resetStick("right");
     }
