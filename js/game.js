@@ -32,6 +32,7 @@ const Game = (() => {
   let diffTier = 1;
   let selectedShipId = "lanca";
   let pendingMode = "survival";
+  let optionsFrom = "title";
   const els = {};
 
   function data() {
@@ -60,6 +61,7 @@ const Game = (() => {
           .catch(() => {});
       }
     }
+    if (typeof Settings !== "undefined") Settings.pulse(ms);
   }
 
   function burst(x, y, color, n, speed) {
@@ -468,6 +470,28 @@ const Game = (() => {
     if (els.overName && !els.overName.value) els.overName.value = name;
     if (els.winName && !els.winName.value) els.winName.value = name;
     return name;
+  }
+
+  function openLayoutEdit() {
+    if (state === "play") state = "pause";
+    optionsFrom = state === "pause" ? "pause" : "title";
+    els.overlay.classList.add("hidden");
+    syncMenuPointer();
+    Settings.beginEdit(() => {
+      if (optionsFrom === "pause") showView("pause");
+      else showView("title");
+    });
+  }
+
+  function openOptions() {
+    optionsFrom = state === "pause" ? "pause" : "title";
+    Settings.fillForm();
+    showView("options");
+  }
+
+  function closeOptions() {
+    if (optionsFrom === "pause") showView("pause");
+    else goMenu();
   }
 
   function goMenu() {
@@ -1034,6 +1058,12 @@ const Game = (() => {
       paintShips();
     });
     els.btnContinue.addEventListener("click", continueSavedRun);
+    els.btnOptions.addEventListener("click", openOptions);
+    els.btnPauseOptions.addEventListener("click", openOptions);
+    els.btnOptBack.addEventListener("click", closeOptions);
+    els.btnOptLayout.addEventListener("click", openLayoutEdit);
+    els.btnOptReset.addEventListener("click", () => Settings.reset());
+    els.btnOptTest.addEventListener("click", () => Settings.test());
     els.btnRanks.addEventListener("click", () => {
       fillRanks();
       state = "ranks";
@@ -1116,6 +1146,12 @@ const Game = (() => {
     els.btnSurvival = document.getElementById("btn-survival");
     els.btnContinue = document.getElementById("btn-continue");
     els.btnRanks = document.getElementById("btn-ranks");
+    els.btnOptions = document.getElementById("btn-options");
+    els.btnPauseOptions = document.getElementById("btn-pause-options");
+    els.btnOptBack = document.getElementById("btn-opt-back");
+    els.btnOptLayout = document.getElementById("btn-opt-layout");
+    els.btnOptReset = document.getElementById("btn-opt-reset");
+    els.btnOptTest = document.getElementById("btn-opt-test");
     els.briefKicker = document.getElementById("brief-kicker");
     els.briefTitle = document.getElementById("brief-title");
     els.briefText = document.getElementById("brief-text");
@@ -1147,6 +1183,7 @@ const Game = (() => {
     els.bossHp = document.getElementById("boss-hp");
 
     Input.attach(canvas);
+    Settings.bind();
     selectedShipId = data().shipId || "lanca";
     resize();
     player = new Player(w / 2, h / 2, selectedShipId);

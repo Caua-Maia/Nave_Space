@@ -2,6 +2,9 @@ const AudioFx = (() => {
   let ctx = null;
   let master = null;
   let started = false;
+  let volume = 0.7;
+  let wantMusic = false;
+  let music = null;
 
   function ensure() {
     if (started) return;
@@ -9,9 +12,37 @@ const AudioFx = (() => {
     if (!AC) return;
     ctx = new AC();
     master = ctx.createGain();
-    master.gain.value = 0.18;
+    master.gain.value = volume * 0.26;
     master.connect(ctx.destination);
     started = true;
+    if (wantMusic) startMusic();
+  }
+
+  function startMusic() {
+    if (!started || music) return;
+    const g = ctx.createGain();
+    g.gain.value = 0.35;
+    g.connect(master);
+    const low = ctx.createOscillator();
+    const high = ctx.createOscillator();
+    low.type = "sine";
+    high.type = "triangle";
+    low.frequency.value = 55;
+    high.frequency.value = 110;
+    low.connect(g);
+    high.connect(g);
+    low.start();
+    high.start();
+    music = { low, high, g };
+  }
+
+  function stopMusic() {
+    if (!music) return;
+    try {
+      music.low.stop();
+      music.high.stop();
+    } catch (err) {}
+    music = null;
   }
 
   function beep(freq, dur, type, gain) {
@@ -33,6 +64,17 @@ const AudioFx = (() => {
     resume() {
       ensure();
       if (ctx && ctx.state === "suspended") ctx.resume();
+    },
+    setVolume(percent) {
+      const n = Number(percent);
+      volume = (Number.isFinite(n) ? Math.max(0, Math.min(100, n)) : 70) / 100;
+      if (master) master.gain.value = volume * 0.26;
+    },
+    setMusic(on) {
+      wantMusic = !!on;
+      if (!started) return;
+      if (wantMusic) startMusic();
+      else stopMusic();
     },
     shoot() {
       beep(880, 0.06, "square", 0.12);

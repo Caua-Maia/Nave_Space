@@ -53,12 +53,7 @@ body {
   inset: 0;
   z-index: 10;
   pointer-events: none;
-  display: flex;
-  justify-content: space-between;
-  padding: clamp(12px, 2.2vh, 18px) clamp(12px, 2.4vw, 24px);
-  padding-top: max(clamp(12px, 2.2vh, 18px), env(safe-area-inset-top));
-  padding-left: max(clamp(12px, 2.4vw, 24px), env(safe-area-inset-left));
-  padding-right: max(clamp(12px, 2.4vw, 24px), env(safe-area-inset-right));
+  display: block;
   text-shadow: 0 0 12px rgba(77, 232, 255, 0.35);
 }
 
@@ -73,11 +68,46 @@ body {
 }
 
 .hud-left,
+.hud-right,
+.hud-center {
+  display: contents;
+}
+
+.hud-left,
 .hud-right {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
   min-width: 160px;
+}
+
+.hud-col-empty {
+  display: none;
+}
+
+.hud-hidden {
+  display: none !important;
+}
+
+[data-layout] {
+  position: absolute;
+  margin: 0;
+  max-width: 78vw;
+}
+
+.hud-left .stat,
+.hud-left .vital {
+  align-items: flex-start;
+  text-align: left;
+}
+
+.hud-right .stat,
+.hud-right .vital {
+  align-items: flex-end;
+  text-align: right;
+}
+
+.hud-center .stat,
+.hud-center .vital {
+  align-items: center;
+  text-align: center;
 }
 
 .hud-right {
@@ -504,8 +534,8 @@ h1 {
   pointer-events: auto;
   position: absolute;
   bottom: max(18px, env(safe-area-inset-bottom));
-  width: clamp(108px, 22vh, 148px);
-  height: clamp(108px, 22vh, 148px);
+  width: 112px;
+  height: 112px;
   border-radius: 50%;
   border: 2px solid rgba(77, 232, 255, 0.45);
   background: rgba(5, 7, 15, 0.28);
@@ -537,7 +567,7 @@ h1 {
 }
 
 body.touch-play #hud {
-  padding-top: max(58px, calc(env(safe-area-inset-top) + 52px));
+  padding: 0;
 }
 
 body.touch-play #boss-hud {
@@ -574,8 +604,7 @@ body.short-screen #touch-pause {
 }
 
 body.short-screen.touch-play #hud {
-  padding-top: 40px;
-  padding-bottom: 8px;
+  padding: 0;
 }
 
 body.short-screen .vital {
@@ -598,7 +627,6 @@ body.short-screen .stat span:last-child {
   font-size: 16px;
 }
 
-body.short-screen .pad-status,
 body.short-screen #ship-name {
   display: none;
 }
@@ -620,10 +648,102 @@ body.short-screen .hud-center {
   gap: 2px;
 }
 
-body.short-screen .stick {
-  width: 76px;
-  height: 76px;
-  bottom: 6px;
+body[data-stick-size="p"] .stick {
+  width: 84px;
+  height: 84px;
+}
+
+body[data-stick-size="g"] .stick {
+  width: 136px;
+  height: 136px;
+}
+
+body.hud-edit #hud.hidden,
+body.hud-edit #touch-ui.hidden,
+body.hud-edit #btn-fullscreen.hidden,
+body.hud-edit #boss-hud.hidden {
+  display: block !important;
+}
+
+body.hud-edit [data-layout] {
+  pointer-events: auto;
+  touch-action: none;
+  z-index: 70;
+  outline: 1px dashed rgba(77, 232, 255, 0.9);
+  outline-offset: 4px;
+}
+
+body.hud-edit [data-layout]::before {
+  content: attr(data-label);
+  position: absolute;
+  left: 0;
+  top: -14px;
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  color: var(--cyan);
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+#hud-edit-bar {
+  position: absolute;
+  z-index: 90;
+  left: 50%;
+  bottom: max(12px, env(safe-area-inset-bottom));
+  transform: translateX(-50%);
+  width: min(440px, calc(100% - 20px));
+  padding: 10px 12px 8px;
+  border: 1px solid rgba(77, 232, 255, 0.45);
+  background: rgba(5, 7, 15, 0.92);
+  text-align: center;
+}
+
+#hud-edit-bar p {
+  margin-bottom: 8px;
+  color: var(--text);
+  font-size: 14px;
+}
+
+#hud-edit-bar.hidden {
+  display: none;
+}
+
+.opt-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px 16px;
+  text-align: left;
+  margin: 0 0 16px;
+}
+
+.opt-grid label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 13px;
+  letter-spacing: 0.06em;
+}
+
+.opt-check {
+  flex-direction: row !important;
+  align-items: center;
+  min-height: 44px;
+}
+
+.opt-grid input[type="range"],
+.opt-grid select {
+  width: 100%;
+  min-height: 36px;
+  background: rgba(0, 0, 0, 0.35);
+  color: var(--text);
+  border: 1px solid rgba(77, 232, 255, 0.35);
+}
+
+@media (max-width: 700px) {
+  .opt-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 body.short-screen.touch-play #boss-hud {

@@ -72,6 +72,7 @@ const TouchControls = (() => {
   function bindStick(el) {
     const which = el.dataset.stick;
     el.addEventListener("pointerdown", (event) => {
+      if (document.body.classList.contains("hud-edit")) return;
       if (pointers[which] != null) return;
       pointers[which] = event.pointerId;
       try {
@@ -101,12 +102,13 @@ const TouchControls = (() => {
     root.id = "touch-ui";
     root.className = "hidden";
     root.innerHTML =
-      '<button type="button" id="touch-pause">PAUSA</button>' +
-      '<div class="stick left" data-stick="left" role="slider" aria-label="Mover" aria-valuemin="0" aria-valuemax="1" aria-valuenow="0"><div class="knob"></div></div>' +
-      '<div class="stick right" data-stick="right" role="slider" aria-label="Mirar" aria-valuemin="0" aria-valuemax="1" aria-valuenow="0"><div class="knob"></div></div>';
+      '<button type="button" id="touch-pause" data-layout="pause" data-label="Pausa">PAUSA</button>' +
+      '<div class="stick left" data-stick="left" data-layout="stickL" data-label="Mover" role="slider" aria-label="Mover" aria-valuemin="0" aria-valuemax="1" aria-valuenow="0"><div class="knob"></div></div>' +
+      '<div class="stick right" data-stick="right" data-layout="stickR" data-label="Mirar" role="slider" aria-label="Mirar" aria-valuemin="0" aria-valuemax="1" aria-valuenow="0"><div class="knob"></div></div>';
     host.appendChild(root);
     root.querySelectorAll(".stick").forEach(bindStick);
     root.querySelector("#touch-pause").addEventListener("click", () => {
+      if (document.body.classList.contains("hud-edit")) return;
       pauseEdge = true;
     });
     root.addEventListener("contextmenu", (event) => event.preventDefault());
@@ -115,6 +117,8 @@ const TouchControls = (() => {
     fsBtn.id = "btn-fullscreen";
     fsBtn.type = "button";
     fsBtn.className = "hidden";
+    fsBtn.dataset.layout = "full";
+    fsBtn.dataset.label = "Tela cheia";
     fsBtn.textContent = "TELA CHEIA";
     fsBtn.addEventListener("click", toggleFullscreen);
     host.appendChild(fsBtn);
@@ -183,6 +187,7 @@ const TouchControls = (() => {
   }
 
   function toggleFullscreen() {
+    if (document.body.classList.contains("hud-edit")) return;
     const el = document.documentElement;
     if (fullscreenElement()) {
       const exit = document.exitFullscreen || document.webkitExitFullscreen;

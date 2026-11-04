@@ -11,7 +11,7 @@
     <link rel="manifest" href="manifest.json" />
     <link rel="icon" href="icons/icon-192.png" />
     <link rel="apple-touch-icon" href="icons/icon-192.png" />
-    <link rel="stylesheet" href="css/style.css?v=9" />
+    <link rel="stylesheet" href="css/style.css?v=11" />
   </head>
   <body>
     <div id="app">
@@ -19,7 +19,7 @@
 
       <div id="hud" class="hidden">
         <div class="hud-left">
-          <div class="vital">
+          <div class="vital" data-hud="vital" data-layout="vital" data-label="Vida">
             <span class="label">VIDA</span>
             <span id="hp-num">100</span>
             <div class="hp-wrap player">
@@ -27,27 +27,27 @@
             </div>
             <span id="ship-name">Lança</span>
           </div>
-          <div class="stat">
+          <div class="stat" data-hud="score" data-layout="score" data-label="Score">
             <span class="label">SCORE</span>
             <span id="score">0</span>
           </div>
-          <div class="stat">
+          <div class="stat" data-hud="combo" data-layout="combo" data-label="Combo">
             <span class="label">COMBO</span>
             <span id="combo">x1</span>
           </div>
         </div>
         <div class="hud-center">
-          <div id="wave">ONDA 1</div>
-          <div id="objective">SOBREVIVA</div>
+          <div id="wave" data-hud="wave" data-layout="wave" data-label="Onda">ONDA 1</div>
+          <div id="objective" data-hud="objective" data-layout="objective" data-label="Objetivo">SOBREVIVA</div>
         </div>
         <div class="hud-right">
-          <div class="stat">
+          <div class="stat" data-hud="time" data-layout="time" data-label="Tempo">
             <span class="label">TEMPO</span>
             <span id="time">0:00</span>
           </div>
-          <div class="stat pad-status" id="pad-status">Controle: —</div>
+          <div class="stat pad-status" id="pad-status" data-hud="pad" data-layout="pad" data-label="Controle">Controle: —</div>
         </div>
-        <div id="boss-hud" class="hidden">
+        <div id="boss-hud" class="hidden" data-layout="boss" data-label="Boss">
           <div id="boss-name">BOSS</div>
           <div class="hp-wrap boss">
             <div id="boss-hp"></div>
@@ -73,6 +73,7 @@
             <button id="btn-story" type="button">HISTÓRIA</button>
             <button id="btn-survival" type="button">SOBREVIVÊNCIA</button>
             <button id="btn-ranks" type="button" class="ghost">RANKING</button>
+            <button id="btn-options" type="button" class="ghost">CONFIGURAÇÕES</button>
           </div>
 
           <p id="story-save" class="menu-pad"></p>
@@ -139,6 +140,35 @@
           <button id="btn-ranks-back" type="button" class="ghost">VOLTAR</button>
         </div>
 
+        <div class="panel hidden" data-view="options" id="view-options">
+          <p class="kicker">OPÇÕES</p>
+          <h1>CONFIGURAÇÕES</h1>
+          <p class="subtitle">Vale neste navegador. O HUD muda na hora, inclusive no meio da partida.</p>
+          <div class="opt-grid">
+            <label>
+              Volume <span id="opt-volume-num">70</span>
+              <input id="opt-volume" type="range" min="0" max="100" value="70" />
+            </label>
+            <label class="opt-check"><input id="opt-music" type="checkbox" /> Música</label>
+            <label class="opt-check"><input id="opt-vibrate" type="checkbox" /> Vibração no celular</label>
+            <label>
+              Tamanho dos analógicos
+              <select id="opt-stick-size">
+                <option value="p">Pequeno</option>
+                <option value="m">Médio</option>
+                <option value="g">Grande</option>
+              </select>
+            </label>
+          </div>
+          <p class="hint">O HUD não tem lugar fixo. Entre em EDITAR POSIÇÕES e arraste vida, onda, analógicos, pausa e o resto para qualquer ponto da tela.</p>
+          <div class="btn-row">
+            <button id="btn-opt-layout" type="button">EDITAR POSIÇÕES</button>
+            <button id="btn-opt-test" type="button" class="ghost">TESTAR SOM E VIBRAÇÃO</button>
+            <button id="btn-opt-reset" type="button" class="ghost">PADRÃO</button>
+            <button id="btn-opt-back" type="button">VOLTAR</button>
+          </div>
+        </div>
+
         <div class="panel hidden" data-view="pause" id="view-pause">
           <p class="kicker">PAUSADO</p>
           <h1>HOLD</h1>
@@ -146,6 +176,7 @@
           <div class="btn-row">
             <button id="btn-resume" type="button">CONTINUAR</button>
             <button id="btn-pause-save" type="button" class="ghost">SALVAR PROGRESSO</button>
+            <button id="btn-pause-options" type="button" class="ghost">CONFIGURAÇÕES</button>
             <button id="btn-pause-menu" type="button" class="ghost">MENU</button>
           </div>
         </div>
@@ -193,14 +224,15 @@
       </div>
     </div>
 
-    <script src="js/audio.js?v=9"></script>
-    <script src="js/input.js?v=9"></script>
-    <script src="js/touch.js?v=9"></script>
-    <script src="js/entities.js?v=9"></script>
-    <script src="js/save.js?v=9"></script>
-    <script src="js/story.js?v=9"></script>
-    <script src="js/game.js?v=9"></script>
-    <script src="js/main.js?v=9"></script>
+    <script src="js/audio.js?v=11"></script>
+    <script src="js/input.js?v=11"></script>
+    <script src="js/touch.js?v=11"></script>
+    <script src="js/entities.js?v=11"></script>
+    <script src="js/save.js?v=11"></script>
+    <script src="js/settings.js?v=11"></script>
+    <script src="js/story.js?v=11"></script>
+    <script src="js/game.js?v=11"></script>
+    <script src="js/main.js?v=11"></script>
     <script>
       if ("serviceWorker" in navigator) {
         navigator.serviceWorker.register("sw.js", { updateViaCache: "none" });
