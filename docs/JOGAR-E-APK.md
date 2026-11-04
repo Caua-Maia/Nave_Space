@@ -1,6 +1,16 @@
-# Jogar online (temporário) e APK no celular
+# Publicar e jogar no desktop
 
-## Desktop — link público (enquanto o PC estiver ligado)
+## Link fixo (GitHub Pages) — recomendado
+
+1. No GitHub: **Settings → Pages → Build and deployment → Source: GitHub Actions**
+2. Cada push na branch **`stage-2`** dispara o workflow *Deploy GitHub Pages (stage-2)*.
+3. Link do jogo: **https://caua-maia.github.io/Nave_Space/**
+
+Compartilhe esse endereço no Chrome ou Edge (desktop). Ranking e save ficam no navegador de cada pessoa.
+
+---
+
+## Desktop — link temporário (PC ligado)
 
 1. Na pasta do jogo: `python -m http.server 8080`
 2. Em outro terminal: `npx --yes cloudflared tunnel --url http://127.0.0.1:8080`
