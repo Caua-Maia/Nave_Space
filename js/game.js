@@ -30,6 +30,8 @@ const Game = (() => {
   let lastBossWave = 0;
   let surgeTimer = 14;
   let diffTier = 1;
+  let selectedShipId = "lanca";
+  let pendingMode = "survival";
   const els = {};
 
   function data() {
@@ -80,6 +82,9 @@ const Game = (() => {
     if (!canvas || !els.overlay) return;
     const menuOpen = !els.overlay.classList.contains("hidden");
     canvas.style.pointerEvents = menuOpen ? "none" : "auto";
+    if (typeof TouchControls !== "undefined") {
+      TouchControls.setVisible(!menuOpen && state === "play");
+    }
   }
 
   function showView(name) {
@@ -154,6 +159,7 @@ const Game = (() => {
       surgeTimer,
       diffTier,
       player: {
+        shipId: player.shipId,
         x: fx(player.x),
         y: fy(player.y),
         vx: player.vx,
@@ -228,7 +234,7 @@ const Game = (() => {
     surgeTimer = s.surgeTimer ?? 14;
     diffTier = s.diffTier ?? 1;
 
-    player = new Player(ux(s.player.x), uy(s.player.y));
+    player = new Player(ux(s.player.x), uy(s.player.y), s.player.shipId);
     Object.assign(player, {
       vx: s.player.vx,
       vy: s.player.vy,
@@ -249,7 +255,7 @@ const Game = (() => {
       return a;
     });
     enemies = s.enemies.map((e) => {
-      const en = new Enemy(ux(e.x), uy(e.y), e.type, 1);
+      const en = new Enemy(ux(e.x), uy(e.y), e.type, e.scale || 1);
       en.hp = e.hp;
       en.angle = e.angle;
       en.cool = e.cool;
@@ -369,7 +375,7 @@ const Game = (() => {
   }
 
   function resetArena() {
-    player = new Player(w * 0.5, h * 0.5);
+    player = new Player(w * 0.5, h * 0.5, selectedShipId);
     bullets = [];
     rocks = [];
     enemies = [];
@@ -573,7 +579,7 @@ const Game = (() => {
     const n = 2 + Math.floor(Math.random() * 3) + Math.floor(wave / 15);
     for (let i = 0; i < n; i++) {
       const p = spawnEdge(w, h);
-      const type = Math.random() < d.shooterChance ? "shooter" : "chaser";
+      const type = pickEnemyType(d.scale);
       enemies.push(new Enemy(p.x, p.y, type, d.scale));
     }
     els.flash.textContent = "SURTO!";
@@ -610,8 +616,7 @@ const Game = (() => {
     if (elapsed > enemyStart && spawnEnemy <= 0 && enemies.length < enemyMax) {
       spawnEnemy = enemyRate * (0.9 + Math.random() * 0.2);
       const p = spawnEdge(w, h);
-      const shootChance = surv ? surv.shooterChance : elapsed > 22 ? 0.38 : 0.22;
-      const type = Math.random() < shootChance ? "shooter" : "chaser";
+      const type = pickEnemyType(surv ? surv.scale : 1 + elapsed * 0.012);
       enemies.push(new Enemy(p.x, p.y, type, surv ? surv.scale : 1));
     }
     if (spawnHeal <= 0 && player.hp < player.maxHp) {
@@ -669,6 +674,15 @@ const Game = (() => {
         aimY = Math.sin(player.aim);
       }
       want = input.pad.shoot;
+    } else if (input.touch && input.touch.mode) {
+      if (input.touch.right.mag > 0.18) {
+        aimX = input.touch.right.x;
+        aimY = input.touch.right.y;
+      } else {
+        aimX = Math.cos(player.aim);
+        aimY = Math.sin(player.aim);
+      }
+      want = input.touch.shoot;
     } else {
       aimX = input.mouse.x - player.x;
       aimY = input.mouse.y - player.y;
@@ -676,14 +690,25 @@ const Game = (() => {
     }
     if (Math.hypot(aimX, aimY) > 0.01) player.aim = Math.atan2(aimY, aimX);
     if (!want || player.cool > 0) return;
-    player.cool = player.rapid > 0 ? 0.07 : 0.13;
-    const n = player.multi > 0 ? 3 : 1;
-    const spread = 0.18;
+    const gap = player.rapid > 0 ? player.gap * 0.55 : player.gap;
+    player.cool = gap;
+    let n = player.shots;
+    if (player.multi > 0 && player.shipId === "lanca") n = 3;
+    if (player.multi > 0 && player.shipId === "bastiao") n = 3;
+    const spread = player.spread || 0.18;
     for (let i = 0; i < n; i++) {
-      const a = player.aim + (n === 1 ? 0 : (i - 1) * spread);
-      bullets.push(
-        new Bullet(player.x + Math.cos(a) * 18, player.y + Math.sin(a) * 18, a, 620, true, "#4de8ff")
+      const a = player.aim + (n === 1 ? 0 : (i - (n - 1) / 2) * spread);
+      const b = new Bullet(
+        player.x + Math.cos(a) * 18,
+        player.y + Math.sin(a) * 18,
+        a,
+        player.bulletSpeed,
+        true,
+        player.color
       );
+      if (player.shipId === "dardo") b.r = 2.2;
+      if (player.shipId === "bastiao") b.r = 4.4;
+      bullets.push(b);
     }
     AudioFx.shoot();
   }
@@ -732,7 +757,7 @@ const Game = (() => {
           burst(b.x, b.y, "#ff4d9a", 5, 160);
           if (en.hp <= 0) {
             AudioFx.explode(2);
-            addScore(en.type === "shooter" ? 180 : 120, en.x, en.y);
+            addScore(en.score || 120, en.x, en.y);
             enemies.splice(e, 1);
             burst(en.x, en.y, "#c084fc", 16, 240);
             rumble(40, 0.2);
@@ -811,7 +836,7 @@ const Game = (() => {
   }
 
   function update(dt, input) {
-    if (state === "menu" || state === "brief" || state === "ranks") return;
+    if (state === "menu" || state === "brief" || state === "ranks" || state === "ships") return;
     if ((state === "dead" || state === "clear" || state === "win") && input.confirmPressed && !typing()) {
       if (state === "dead") document.getElementById("btn-retry").click();
       else if (state === "clear") document.getElementById("btn-next").click();
@@ -851,6 +876,8 @@ const Game = (() => {
     els.score.textContent = score.toLocaleString("pt-BR");
     els.combo.textContent = `x${multiplier()}` + (combo > 1 ? `  (${combo})` : "");
     els.hp.style.width = `${Math.max(0, (player.hp / player.maxHp) * 100)}%`;
+    if (els.hpNum) els.hpNum.textContent = `${Math.max(0, Math.ceil(player.hp))}`;
+    if (els.shipName) els.shipName.textContent = player.shipName || "LANÇA";
     els.time.textContent = formatTime(elapsed);
     if (mode === "story") {
       const st = Story.get(stageId);
@@ -934,12 +961,58 @@ const Game = (() => {
     }
   }
 
-  function bind() {
-    els.btnStory.addEventListener("click", () => {
+  function shipMark(id) {
+    const marks = {
+      lanca: "32,10 46,50 32,40 18,50",
+      dardo: "32,8 41,32 32,56 23,32",
+      bastiao: "32,12 49,22 49,42 32,52 15,42 15,22",
+    };
+    const points = marks[id] || marks.lanca;
+    return `<svg class="geo geo-${id}" viewBox="0 0 64 64" width="64" height="64" aria-hidden="true">
+      <polygon points="${points}" />
+    </svg>`;
+  }
+
+  function paintShips() {
+    els.shipGrid.innerHTML = SHIP_ROSTER.map((ship) => {
+      const on = ship.id === selectedShipId ? " selected" : "";
+      return `<button type="button" class="ship-card${on}" data-ship="${ship.id}">
+        ${shipMark(ship.id)}
+        <strong>${ship.name}</strong>
+        <p>${ship.blurb}</p>
+      </button>`;
+    }).join("");
+  }
+
+  function openHangar(modeName) {
+    AudioFx.resume();
+    commitName(els.pilotName.value);
+    pendingMode = modeName;
+    selectedShipId = data().shipId || "lanca";
+    state = "ships";
+    paintShips();
+    showView("ships");
+  }
+
+  function confirmShip() {
+    selectedShipId = Save.setShip(selectedShipId);
+    if (pendingMode === "story") {
       state = "brief";
       openStoryBrief();
+    } else startSurvival(true);
+  }
+
+  function bind() {
+    els.btnStory.addEventListener("click", () => openHangar("story"));
+    els.btnSurvival.addEventListener("click", () => openHangar("survival"));
+    els.btnShipGo.addEventListener("click", confirmShip);
+    els.btnShipBack.addEventListener("click", goMenu);
+    els.shipGrid.addEventListener("click", (ev) => {
+      const card = ev.target.closest("[data-ship]");
+      if (!card) return;
+      selectedShipId = card.dataset.ship;
+      paintShips();
     });
-    els.btnSurvival.addEventListener("click", () => startSurvival(true));
     els.btnContinue.addEventListener("click", continueSavedRun);
     els.btnRanks.addEventListener("click", () => {
       fillRanks();
@@ -1006,6 +1079,11 @@ const Game = (() => {
     els.score = document.getElementById("score");
     els.combo = document.getElementById("combo");
     els.hp = document.getElementById("hp-bar");
+    els.hpNum = document.getElementById("hp-num");
+    els.shipName = document.getElementById("ship-name");
+    els.shipGrid = document.getElementById("ship-grid");
+    els.btnShipGo = document.getElementById("btn-ship-go");
+    els.btnShipBack = document.getElementById("btn-ship-back");
     els.time = document.getElementById("time");
     els.wave = document.getElementById("wave");
     els.objective = document.getElementById("objective");
@@ -1049,8 +1127,9 @@ const Game = (() => {
     els.bossHp = document.getElementById("boss-hp");
 
     Input.attach(canvas);
+    selectedShipId = data().shipId || "lanca";
     resize();
-    player = new Player(w / 2, h / 2);
+    player = new Player(w / 2, h / 2, selectedShipId);
     window.addEventListener("resize", resize);
     bind();
     refreshTitle();

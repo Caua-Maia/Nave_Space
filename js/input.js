@@ -85,6 +85,7 @@ const Input = (() => {
 
   function snapshot() {
     const pad = readPad();
+    const touch = typeof TouchControls !== "undefined" ? TouchControls.read() : null;
     let moveX = 0;
     let moveY = 0;
     if (keys.has("KeyA") || keys.has("ArrowLeft")) moveX -= 1;
@@ -97,15 +98,21 @@ const Input = (() => {
     const move =
       pad && pad.left.mag > 0.02
         ? { x: pad.left.x, y: pad.left.y, mag: pad.left.mag }
-        : kbMove;
+        : touch && touch.left.mag > 0.02
+          ? { x: touch.left.x, y: touch.left.y, mag: touch.left.mag }
+          : kbMove;
 
     const kbShoot = mouse.down || keys.has("Space") || keys.has("KeyJ");
-    const pausePressed = justPressed("pause", keys.has("Escape") || keys.has("KeyP") || !!(pad && pad.start));
+    const pausePressed = justPressed(
+      "pause",
+      keys.has("Escape") || keys.has("KeyP") || !!(pad && pad.start) || !!(touch && touch.pausePressed)
+    );
     const confirmPressed = justPressed("ok", keys.has("Enter") || !!(pad && pad.confirm));
 
     return {
       move,
       pad,
+      touch,
       mouse,
       kbShoot,
       pausePressed,
@@ -149,6 +156,9 @@ const Input = (() => {
     attach,
     snapshot,
     status() {
+      if (!padName && typeof TouchControls !== "undefined" && TouchControls.isTouchDevice()) {
+        return "Controle: joysticks na tela";
+      }
       if (!padName) return "Controle: não detectado (WASD + mouse)";
       const short = padName.length > 42 ? padName.slice(0, 42) + "…" : padName;
       return `Controle: ${short}`;

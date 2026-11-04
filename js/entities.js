@@ -287,29 +287,94 @@ class Boss {
   }
 }
 
+const ENEMY_TIER_COLORS = ["#7dff9a", "#c084fc", "#4de8ff", "#ffe566", "#ffb347", "#ff4d9a", "#ff5a3c"];
+
+function enemyTierColor(scale) {
+  const i = Math.max(0, Math.min(ENEMY_TIER_COLORS.length - 1, Math.floor(scale) - 1));
+  return ENEMY_TIER_COLORS[i];
+}
+
+function pickEnemyType(scale) {
+  const bag = ["chaser", "chaser", "shooter"];
+  if (scale > 1.35) bag.push("orbit", "swarm", "shooter");
+  if (scale > 2.1) bag.push("sniper", "block");
+  if (scale > 3.2) bag.push("sniper", "block", "orbit");
+  return pick(bag);
+}
+
 class Enemy {
   constructor(x, y, type, scale = 1) {
     this.x = x;
     this.y = y;
     this.type = type;
-    this.r = type === "shooter" ? 16 : 14;
-    const bonus = Math.max(0, Math.floor(scale - 1));
-    this.hp = (type === "shooter" ? 3 : 2) + bonus;
+    this.scale = scale;
+    this.color = enemyTierColor(scale);
     this.angle = 0;
-    this.cool = rand(0.4, 1.4);
+    this.cool = rand(0.35, 1.2);
     this.kind = "enemy";
+    this.orbit = rand(0, TAU);
+    const bonus = Math.max(0, Math.floor(scale - 1));
     const sm = 1 + Math.min(2.2, (scale - 1) * 0.14);
-    this.speed = (type === "chaser" ? rand(95, 140) : rand(55, 85)) * sm;
+    const stats = {
+      chaser: { r: 14, hp: 2, speed: rand(95, 140), score: 120 },
+      shooter: { r: 16, hp: 3, speed: rand(55, 85), score: 180 },
+      orbit: { r: 18, hp: 4, speed: rand(70, 100), score: 220 },
+      sniper: { r: 13, hp: 2, speed: rand(40, 60), score: 260 },
+      block: { r: 22, hp: 6, speed: rand(32, 48), score: 280 },
+      swarm: { r: 9, hp: 1, speed: rand(150, 190), score: 70 },
+    };
+    const st = stats[type] || stats.chaser;
+    this.r = st.r;
+    this.hp = st.hp + (type === "swarm" ? 0 : bonus);
+    this.speed = st.speed * sm;
+    this.score = st.score;
+  }
+  shoot(bullets, angle, speed, color, radius) {
+    const b = new Bullet(this.x, this.y, angle, speed, false, color || this.color, 14);
+    if (radius) b.r = radius;
+    bullets.push(b);
   }
   update(dt, w, h, player, bullets) {
     const dx = player.x - this.x;
     const dy = player.y - this.y;
+    const d = Math.hypot(dx, dy) || 1;
     this.angle = Math.atan2(dy, dx);
-    if (this.type === "chaser") {
+    if (this.type === "chaser" || this.type === "swarm") {
       this.x += Math.cos(this.angle) * this.speed * dt;
       this.y += Math.sin(this.angle) * this.speed * dt;
+    } else if (this.type === "orbit") {
+      this.orbit += dt * 1.4;
+      const want = 240;
+      const step = d > want ? this.speed : d < want - 50 ? -this.speed * 0.6 : 0;
+      this.x += Math.cos(this.angle) * step * dt;
+      this.y += Math.sin(this.angle) * step * dt;
+      this.x += Math.cos(this.orbit) * 90 * dt;
+      this.y += Math.sin(this.orbit) * 90 * dt;
+      this.cool -= dt;
+      if (this.cool <= 0 && d < 560) {
+        this.cool = rand(1.1, 1.7);
+        for (let i = -1; i <= 1; i++) this.shoot(bullets, this.angle + i * 0.35, 220, this.color, 3.2);
+      }
+    } else if (this.type === "sniper") {
+      const want = 420;
+      const step = d > want ? this.speed : d < want - 80 ? -this.speed * 0.8 : 0;
+      this.x += Math.cos(this.angle) * step * dt;
+      this.y += Math.sin(this.angle) * step * dt;
+      this.cool -= dt;
+      if (this.cool <= 0 && d < 720) {
+        this.cool = rand(1.6, 2.3);
+        this.shoot(bullets, this.angle, 460, "#fff6c2", 2.2);
+      }
+    } else if (this.type === "block") {
+      this.x += Math.cos(this.angle) * this.speed * dt;
+      this.y += Math.sin(this.angle) * this.speed * dt;
+      this.cool -= dt;
+      if (this.cool <= 0 && d < 380) {
+        this.cool = rand(1.3, 1.9);
+        this.shoot(bullets, this.angle - 0.2, 160, this.color, 6.5);
+        this.shoot(bullets, this.angle + 0.2, 160, this.color, 6.5);
+      }
     } else {
-      const d = Math.hypot(dx, dy);
       const want = 280;
       const step = d > want ? this.speed : d < want - 60 ? -this.speed * 0.7 : 0;
       this.x += Math.cos(this.angle) * step * dt;
@@ -318,32 +383,100 @@ class Enemy {
       this.cool -= dt;
       if (this.cool <= 0 && d < 520) {
         this.cool = rand(0.85, 1.4);
-        bullets.push(new Bullet(this.x, this.y, this.angle, 260, false, "#ff4d9a"));
+        this.shoot(bullets, this.angle, 260, this.color, 3.8);
       }
     }
     wrap(this, w, h, this.r);
+  }
+  traceShape(ctx) {
+    const r = this.r;
+    ctx.beginPath();
+    if (this.type === "shooter") {
+      ctx.moveTo(r, 0);
+      ctx.lineTo(-r * 0.65, r * 0.7);
+      ctx.lineTo(-r * 0.25, 0);
+      ctx.lineTo(-r * 0.65, -r * 0.7);
+    } else if (this.type === "orbit") {
+      for (let i = 0; i < 6; i++) {
+        const a = (i / 6) * TAU - Math.PI / 2;
+        const x = Math.cos(a) * r;
+        const y = Math.sin(a) * r;
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      }
+    } else if (this.type === "sniper") {
+      ctx.moveTo(r, 0);
+      ctx.lineTo(0, r * 0.65);
+      ctx.lineTo(-r, 0);
+      ctx.lineTo(0, -r * 0.65);
+    } else if (this.type === "block") {
+      ctx.rect(-r * 0.75, -r * 0.75, r * 1.5, r * 1.5);
+    } else {
+      ctx.moveTo(r, 0);
+      ctx.lineTo(-r * 0.75, r * 0.75);
+      ctx.lineTo(-r * 0.75, -r * 0.75);
+    }
+    ctx.closePath();
   }
   draw(ctx) {
     ctx.save();
     ctx.translate(this.x, this.y);
     ctx.rotate(this.angle);
-    ctx.strokeStyle = this.type === "shooter" ? "#ff4d9a" : "#c084fc";
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    if (this.type === "shooter") {
-      ctx.moveTo(16, 0);
-      ctx.lineTo(-10, 11);
-      ctx.lineTo(-4, 0);
-      ctx.lineTo(-10, -11);
-    } else {
-      ctx.moveTo(14, 0);
-      ctx.lineTo(-10, 10);
-      ctx.lineTo(-10, -10);
-    }
-    ctx.closePath();
+    ctx.strokeStyle = this.color;
+    ctx.lineWidth = this.type === "block" ? 3 : 2;
+    this.traceShape(ctx);
     ctx.stroke();
     ctx.restore();
   }
+}
+
+const SHIP_ROSTER = [
+  {
+    id: "lanca",
+    name: "Lança",
+    blurb: "A nave clássica. Equilíbrio entre velocidade, vida e um tiro frontal que vira leque com o pickup T.",
+    hp: 100,
+    speed: 340,
+    acc: 980,
+    r: 14,
+    gap: 0.13,
+    shots: 1,
+    spread: 0.18,
+    bulletSpeed: 620,
+    color: "#4de8ff",
+  },
+  {
+    id: "dardo",
+    name: "Dardo",
+    blurb: "Losango rápido e frágil. Rajada fina e veloz, sempre em linha reta. Cabe em espaços apertados.",
+    hp: 70,
+    speed: 460,
+    acc: 1400,
+    r: 10,
+    gap: 0.07,
+    shots: 1,
+    spread: 0,
+    bulletSpeed: 920,
+    color: "#e8ff6a",
+  },
+  {
+    id: "bastiao",
+    name: "Bastião",
+    blurb: "Hexágono pesado. Mais vida, anda devagar e dispara dois canhões laterais o tempo todo.",
+    hp: 150,
+    speed: 250,
+    acc: 720,
+    r: 18,
+    gap: 0.18,
+    shots: 2,
+    spread: 0.28,
+    bulletSpeed: 520,
+    color: "#ffb347",
+  },
+];
+
+function shipById(id) {
+  return SHIP_ROSTER.find((s) => s.id === id) || SHIP_ROSTER[0];
 }
 
 class PowerUp {
@@ -377,15 +510,25 @@ class PowerUp {
 }
 
 class Player {
-  constructor(x, y) {
+  constructor(x, y, shipId) {
+    const spec = shipById(shipId);
+    this.shipId = spec.id;
+    this.shipName = spec.name;
+    this.color = spec.color;
     this.x = x;
     this.y = y;
     this.vx = 0;
     this.vy = 0;
     this.aim = 0;
-    this.r = 14;
-    this.hp = 100;
-    this.maxHp = 100;
+    this.r = spec.r;
+    this.maxSpeed = spec.speed;
+    this.acc = spec.acc;
+    this.gap = spec.gap;
+    this.shots = spec.shots;
+    this.spread = spec.spread;
+    this.bulletSpeed = spec.bulletSpeed;
+    this.hp = spec.hp;
+    this.maxHp = spec.hp;
     this.iframes = 0;
     this.cool = 0;
     this.rapid = 0;
@@ -393,8 +536,8 @@ class Player {
     this.multi = 0;
   }
   update(dt, input, w, h) {
-    const acc = 980;
-    const max = 340;
+    const acc = this.acc;
+    const max = this.maxSpeed;
     this.vx += input.move.x * acc * dt;
     this.vy += input.move.y * acc * dt;
     this.vx *= Math.pow(0.08, dt);
@@ -432,13 +575,29 @@ class Player {
     ctx.translate(this.x, this.y);
     ctx.rotate(this.aim);
     if (this.iframes > 0 && ((this.iframes * 18) | 0) % 2 === 0) ctx.globalAlpha = 0.35;
-    ctx.strokeStyle = "#4de8ff";
+    ctx.strokeStyle = this.color;
     ctx.lineWidth = 2.4;
     ctx.beginPath();
-    ctx.moveTo(16, 0);
-    ctx.lineTo(-12, 11);
-    ctx.lineTo(-6, 0);
-    ctx.lineTo(-12, -11);
+    const r = this.r + 2;
+    if (this.shipId === "dardo") {
+      ctx.moveTo(r + 4, 0);
+      ctx.lineTo(0, r * 0.45);
+      ctx.lineTo(-r, 0);
+      ctx.lineTo(0, -r * 0.45);
+    } else if (this.shipId === "bastiao") {
+      for (let i = 0; i < 6; i++) {
+        const a = (i / 6) * TAU;
+        const x = Math.cos(a) * r;
+        const y = Math.sin(a) * r;
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      }
+    } else {
+      ctx.moveTo(r + 2, 0);
+      ctx.lineTo(-r * 0.85, r * 0.75);
+      ctx.lineTo(-r * 0.4, 0);
+      ctx.lineTo(-r * 0.85, -r * 0.75);
+    }
     ctx.closePath();
     ctx.stroke();
     if (this.shield > 0) {

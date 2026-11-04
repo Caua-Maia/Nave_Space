@@ -5,6 +5,7 @@ const Save = (() => {
   function blank() {
     return {
       name: "",
+      shipId: "lanca",
       story: { nextStage: 1, campaignScore: 0, cleared: 0 },
       survivalBoard: [],
       storyBoard: [],
@@ -23,6 +24,7 @@ const Save = (() => {
       const base = blank();
       return {
         name: typeof data.name === "string" ? data.name.slice(0, 16) : "",
+        shipId: data.shipId === "dardo" || data.shipId === "bastiao" ? data.shipId : "lanca",
         story: { ...base.story, ...(data.story || {}) },
         survivalBoard: Array.isArray(data.survivalBoard) ? data.survivalBoard : [],
         storyBoard: Array.isArray(data.storyBoard) ? data.storyBoard : [],
@@ -44,6 +46,13 @@ const Save = (() => {
       .slice(0, 16);
     write(data);
     return data.name;
+  }
+
+  function setShip(id) {
+    const data = load();
+    data.shipId = id === "dardo" || id === "bastiao" ? id : "lanca";
+    write(data);
+    return data.shipId;
   }
 
   function saveStory(story) {
@@ -85,5 +94,5 @@ const Save = (() => {
     return trimmed;
   }
 
-  return { load, setName, saveStory, saveSession, clearSession, hasSession, pushBoard };
+  return { load, setName, setShip, saveStory, saveSession, clearSession, hasSession, pushBoard };
 })();
