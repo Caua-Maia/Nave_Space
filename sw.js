@@ -1,33 +1,39 @@
-const CACHE = "space-survivor-v6";
-const ASSETS = [
-  "/",
-  "/index.html",
-  "/css/style.css",
-  "/js/audio.js",
-  "/js/input.js",
-  "/js/touch.js",
-  "/js/entities.js",
-  "/js/save.js",
-  "/js/story.js",
-  "/js/game.js",
-  "/js/main.js",
-  "/manifest.json",
-  "/icons/icon-192.png",
-  "/icons/icon-512.png",
+const CACHE = "space-survivor-v7";
+const BASE = new URL("./", self.location);
+const FILES = [
+  "",
+  "index.html",
+  "css/style.css",
+  "js/audio.js",
+  "js/input.js",
+  "js/touch.js",
+  "js/entities.js",
+  "js/save.js",
+  "js/story.js",
+  "js/game.js",
+  "js/main.js",
+  "manifest.json",
+  "icons/icon-192.png",
+  "icons/icon-512.png",
 ];
+
+const ASSETS = FILES.map((file) => new URL(file, BASE).href);
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
-    caches.open(CACHE).then((cache) =>
-      Promise.all(
-        ASSETS.map((url) =>
-          fetch(url, { cache: "reload" }).then((response) => {
-            if (!response.ok) throw new Error(url);
-            return cache.put(url, response);
-          })
+    caches
+      .open(CACHE)
+      .then((cache) =>
+        Promise.all(
+          ASSETS.map((url) =>
+            fetch(url, { cache: "reload" }).then((response) => {
+              if (!response.ok) throw new Error(url);
+              return cache.put(url, response);
+            })
+          )
         )
       )
-    ).then(() => self.skipWaiting())
+      .then(() => self.skipWaiting())
   );
 });
 
@@ -51,6 +57,8 @@ self.addEventListener("fetch", (event) => {
         }
         return response;
       })
-      .catch(() => caches.match(event.request).then((cached) => cached || caches.match("/index.html")))
+      .catch(() =>
+        caches.match(event.request).then((cached) => cached || caches.match(new URL("index.html", BASE).href))
+      )
   );
 });

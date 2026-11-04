@@ -1,0 +1,11 @@
+{
+  "appId": "com.cauamaia.spacesurvivor",
+  "appName": "Space Survivor",
+  "webDir": "www",
+  "android": {
+    "allowMixedContent": false
+  },
+  "server": {
+    "androidScheme": "https"
+  }
+}

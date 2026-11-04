@@ -4,3 +4,7 @@
 __pycache__/
 .DS_Store
 Thumbs.db
+mobile/node_modules/
+mobile/www/
+mobile/android/
+mobile/.gradle/

@@ -2,7 +2,7 @@
   "name": "Dual-Stick Space Survivor",
   "short_name": "Space Survivor",
   "description": "Twin-stick shooter 2D no navegador",
-  "start_url": "/",
+  "start_url": "./",
   "display": "fullscreen",
   "orientation": "landscape",
   "background_color": "#05070f",
