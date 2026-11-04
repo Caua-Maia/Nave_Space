@@ -4,12 +4,23 @@ const TouchControls = (() => {
   const axes = { left: { ...zero }, right: { ...zero }, shoot: false };
   const pointers = { left: null, right: null };
   let root = null;
+  let fsBtn = null;
   let pauseEdge = false;
   let visible = false;
-  let touchUsed = false;
+  const handheld = detectHandheld();
+
+  function detectHandheld() {
+    const ua = navigator.userAgent || "";
+    const iPad = navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1;
+    if (/Android|iPhone|iPad|iPod|Mobile/i.test(ua) || iPad) return true;
+    const fine = window.matchMedia("(any-pointer: fine)").matches;
+    const hover = window.matchMedia("(any-hover: hover)").matches;
+    if (fine || hover) return false;
+    return window.matchMedia("(pointer: coarse)").matches && window.matchMedia("(hover: none)").matches;
+  }
 
   function isTouchDevice() {
-    return touchUsed || window.matchMedia("(pointer: coarse)").matches;
+    return handheld;
   }
 
   function knobOf(which) {
@@ -99,6 +110,42 @@ const TouchControls = (() => {
       pauseEdge = true;
     });
     root.addEventListener("contextmenu", (event) => event.preventDefault());
+
+    fsBtn = document.createElement("button");
+    fsBtn.id = "btn-fullscreen";
+    fsBtn.type = "button";
+    fsBtn.className = "hidden";
+    fsBtn.textContent = "TELA CHEIA";
+    fsBtn.addEventListener("click", toggleFullscreen);
+    host.appendChild(fsBtn);
+    document.addEventListener("fullscreenchange", syncFullscreenButton);
+    document.addEventListener("webkitfullscreenchange", syncFullscreenButton);
+    syncFullscreenButton();
+  }
+
+  function fullscreenElement() {
+    return document.fullscreenElement || document.webkitFullscreenElement || null;
+  }
+
+  function toggleFullscreen() {
+    const el = document.documentElement;
+    if (!fullscreenElement()) {
+      const req = el.requestFullscreen || el.webkitRequestFullscreen;
+      if (req) {
+        Promise.resolve(req.call(el)).catch(() => {});
+      }
+    } else {
+      const exit = document.exitFullscreen || document.webkitExitFullscreen;
+      if (exit) exit.call(document);
+    }
+  }
+
+  function syncFullscreenButton() {
+    if (!fsBtn) return;
+    const standalone =
+      window.matchMedia("(display-mode: standalone)").matches || window.navigator.standalone === true;
+    fsBtn.classList.toggle("hidden", !handheld || standalone);
+    fsBtn.textContent = fullscreenElement() ? "JANELA" : "TELA CHEIA";
   }
 
   function apply() {
@@ -113,14 +160,6 @@ const TouchControls = (() => {
       resetStick("right");
     }
   }
-
-  window.addEventListener(
-    "touchstart",
-    () => {
-      touchUsed = true;
-    },
-    { passive: true }
-  );
 
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", mount);

@@ -2,7 +2,15 @@
 
 Jogo 2D estilo Asteroids + twin-stick shooter. Roda no navegador (Chrome / Edge).
 
-## Como jogar
+## Jogar online (desktop)
+
+Depois de ativar o GitHub Pages (Settings → Pages → **GitHub Actions**), o Stage 2 fica em:
+
+**https://caua-maia.github.io/Nave_Space/**
+
+Passo a passo completo: [docs/JOGAR-E-APK.md](docs/JOGAR-E-APK.md) (seção GitHub Pages).
+
+## Como jogar (local)
 
 1. Dê um duplo clique em `index.html` **ou** sirva a pasta:
 

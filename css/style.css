@@ -456,6 +456,22 @@ h1 {
   color: var(--muted);
 }
 
+#btn-fullscreen {
+  position: absolute;
+  z-index: 50;
+  top: max(10px, env(safe-area-inset-top));
+  right: max(10px, env(safe-area-inset-right));
+  min-height: 44px;
+  padding: 8px 14px;
+  border: 1px solid rgba(77, 232, 255, 0.55);
+  background: rgba(5, 7, 15, 0.82);
+  color: var(--cyan);
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  font-size: 13px;
+  cursor: pointer;
+}
+
 #touch-ui {
   position: absolute;
   inset: 0;
