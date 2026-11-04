@@ -17,9 +17,8 @@ html,
 body {
   position: fixed;
   inset: 0;
-  width: 100vw;
-  height: 100vh;
-  height: 100dvh;
+  width: 100%;
+  height: 100%;
   overflow: hidden;
   overscroll-behavior: none;
   touch-action: none;
@@ -30,10 +29,12 @@ body {
 }
 
 #app {
-  position: relative;
-  width: 100vw;
-  height: 100vh;
-  height: 100dvh;
+  position: fixed;
+  left: var(--vv-left, 0px);
+  top: var(--vv-top, 0px);
+  width: var(--vv-width, 100%);
+  height: var(--vv-height, 100dvh);
+  overflow: hidden;
 }
 
 #game {
@@ -41,9 +42,8 @@ body {
   inset: 0;
   z-index: 0;
   display: block;
-  width: 100vw;
-  height: 100vh;
-  height: 100dvh;
+  width: 100%;
+  height: 100%;
   cursor: crosshair;
   touch-action: none;
 }
@@ -301,7 +301,7 @@ body {
   position: relative;
   z-index: 1;
   width: min(760px, calc(100vw - 20px));
-  max-height: calc(100dvh - 16px);
+  max-height: calc(var(--vv-height, 100dvh) - 16px);
   overflow: auto;
   padding: clamp(16px, 4vh, 36px) clamp(14px, 4vw, 40px);
   border: 1px solid rgba(77, 232, 255, 0.28);
@@ -542,6 +542,112 @@ body.touch-play #hud {
 
 body.touch-play #boss-hud {
   bottom: max(128px, calc(env(safe-area-inset-bottom) + 118px));
+}
+
+#fs-hint {
+  position: absolute;
+  z-index: 50;
+  left: 50%;
+  top: 52px;
+  transform: translateX(-50%);
+  width: min(520px, calc(100% - 24px));
+  padding: 8px 10px;
+  border: 1px solid rgba(77, 232, 255, 0.45);
+  background: rgba(5, 7, 15, 0.92);
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1.35;
+  text-align: center;
+  pointer-events: none;
+}
+
+#fs-hint.hidden {
+  display: none;
+}
+
+body.short-screen #btn-fullscreen,
+body.short-screen #touch-pause {
+  min-height: 32px;
+  padding: 4px 8px;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+}
+
+body.short-screen.touch-play #hud {
+  padding-top: 40px;
+  padding-bottom: 8px;
+}
+
+body.short-screen .vital {
+  min-width: 0;
+  margin-bottom: 2px;
+  padding: 4px 6px;
+  gap: 2px;
+}
+
+body.short-screen #hp-num {
+  font-size: 18px;
+}
+
+body.short-screen .hp-wrap.player {
+  width: 96px;
+  height: 8px;
+}
+
+body.short-screen .stat span:last-child {
+  font-size: 16px;
+}
+
+body.short-screen .pad-status,
+body.short-screen #ship-name {
+  display: none;
+}
+
+body.short-screen #wave,
+body.short-screen #objective,
+body.short-screen .stat .label {
+  font-size: 11px;
+  letter-spacing: 0.08em;
+}
+
+body.short-screen #objective {
+  max-width: 42vw;
+}
+
+body.short-screen .hud-left,
+body.short-screen .hud-right,
+body.short-screen .hud-center {
+  gap: 2px;
+}
+
+body.short-screen .stick {
+  width: 76px;
+  height: 76px;
+  bottom: 6px;
+}
+
+body.short-screen.touch-play #boss-hud {
+  bottom: 86px;
+  width: min(280px, calc(100% - 180px));
+}
+
+body.short-screen h1 {
+  font-size: 30px;
+  margin-bottom: 8px;
+}
+
+body.short-screen .subtitle,
+body.short-screen .kicker {
+  margin-bottom: 8px;
+}
+
+body.short-screen .controls-grid {
+  display: none;
+}
+
+body.short-screen #fs-hint {
+  top: 40px;
+  font-size: 12px;
 }
 
 @media (max-width: 844px) {

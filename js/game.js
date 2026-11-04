@@ -948,10 +948,30 @@ const Game = (() => {
     requestAnimationFrame(loop);
   }
 
+  function readViewport() {
+    const vv = window.visualViewport;
+    if (!vv) {
+      return { top: 0, left: 0, width: window.innerWidth, height: window.innerHeight };
+    }
+    return { top: vv.offsetTop, left: vv.offsetLeft, width: vv.width, height: vv.height };
+  }
+
   function resize() {
+    const box = readViewport();
+    const root = document.documentElement;
+    root.style.setProperty("--vv-top", box.top + "px");
+    root.style.setProperty("--vv-left", box.left + "px");
+    root.style.setProperty("--vv-width", box.width + "px");
+    root.style.setProperty("--vv-height", box.height + "px");
+    const handheld = typeof TouchControls !== "undefined" && TouchControls.isTouchDevice();
+    document.body.classList.toggle("handheld", !!handheld);
+    document.body.classList.toggle("short-screen", !!handheld && box.height < 430);
     const dpr = Math.min(2, window.devicePixelRatio || 1);
-    w = Math.floor(window.innerWidth * dpr);
-    h = Math.floor(window.innerHeight * dpr);
+    const nw = Math.max(1, Math.floor(box.width * dpr));
+    const nh = Math.max(1, Math.floor(box.height * dpr));
+    if (canvas.width === nw && canvas.height === nh) return;
+    w = nw;
+    h = nh;
     canvas.width = w;
     canvas.height = h;
     makeStars();
@@ -1131,6 +1151,10 @@ const Game = (() => {
     resize();
     player = new Player(w / 2, h / 2, selectedShipId);
     window.addEventListener("resize", resize);
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener("resize", resize);
+      window.visualViewport.addEventListener("scroll", resize);
+    }
     bind();
     refreshTitle();
     showView("title");

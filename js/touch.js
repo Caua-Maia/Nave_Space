@@ -118,9 +118,64 @@ const TouchControls = (() => {
     fsBtn.textContent = "TELA CHEIA";
     fsBtn.addEventListener("click", toggleFullscreen);
     host.appendChild(fsBtn);
+    const hint = document.createElement("p");
+    hint.id = "fs-hint";
+    hint.className = "hidden";
+    host.appendChild(hint);
     document.addEventListener("fullscreenchange", syncFullscreenButton);
     document.addEventListener("webkitfullscreenchange", syncFullscreenButton);
     syncFullscreenButton();
+  }
+
+  function isIphone() {
+    return /iPhone|iPod/.test(navigator.userAgent || "");
+  }
+
+  function safariBarsOpen() {
+    const vv = window.visualViewport;
+    if (!vv) return false;
+    return window.innerHeight - vv.height > 28 || vv.offsetTop > 8;
+  }
+
+  function showFsHint(text) {
+    const hint = document.getElementById("fs-hint");
+    if (!hint) return;
+    hint.textContent = text;
+    hint.classList.remove("hidden");
+    clearTimeout(showFsHint.timer);
+    showFsHint.timer = setTimeout(() => hint.classList.add("hidden"), 4200);
+  }
+
+  function collapseIosChrome() {
+    const html = document.documentElement;
+    const body = document.body;
+    const prev = {
+      htmlPos: html.style.position,
+      bodyPos: body.style.position,
+      htmlH: html.style.height,
+      bodyH: body.style.height,
+      overflow: html.style.overflow,
+      touch: body.style.touchAction,
+    };
+    html.style.position = "static";
+    body.style.position = "relative";
+    html.style.height = "auto";
+    body.style.height = window.innerHeight + 140 + "px";
+    html.style.overflow = "auto";
+    body.style.touchAction = "pan-y";
+    window.scrollTo(0, 80);
+    setTimeout(() => {
+      window.scrollTo(0, 0);
+      html.style.position = prev.htmlPos;
+      body.style.position = prev.bodyPos;
+      html.style.height = prev.htmlH;
+      body.style.height = prev.bodyH;
+      html.style.overflow = prev.overflow;
+      body.style.touchAction = prev.touch;
+      if (safariBarsOpen()) {
+        showFsHint("O iPhone não esconde a barra pelo botão. Toque em aA na barra do Safari e escolha Ocultar barra de ferramentas, ou Compartilhar e Adicionar à Tela de Início.");
+      }
+    }, 350);
   }
 
   function fullscreenElement() {
@@ -129,15 +184,21 @@ const TouchControls = (() => {
 
   function toggleFullscreen() {
     const el = document.documentElement;
-    if (!fullscreenElement()) {
-      const req = el.requestFullscreen || el.webkitRequestFullscreen;
-      if (req) {
-        Promise.resolve(req.call(el)).catch(() => {});
-      }
-    } else {
+    if (fullscreenElement()) {
       const exit = document.exitFullscreen || document.webkitExitFullscreen;
       if (exit) exit.call(document);
+      return;
     }
+    const req = el.requestFullscreen || el.webkitRequestFullscreen;
+    if (req && !isIphone()) {
+      Promise.resolve(req.call(el)).catch(() => {});
+      return;
+    }
+    if (isIphone()) {
+      collapseIosChrome();
+      return;
+    }
+    if (req) Promise.resolve(req.call(el)).catch(() => {});
   }
 
   function syncFullscreenButton() {
