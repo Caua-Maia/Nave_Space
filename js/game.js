@@ -494,6 +494,13 @@ const Game = (() => {
     else goMenu();
   }
 
+  function enterHangar() {
+    Save.setOptions({ introSeen: true });
+    state = "menu";
+    refreshTitle();
+    showView("title");
+  }
+
   function goMenu() {
     state = "menu";
     els.hud.classList.add("hidden");
@@ -1058,6 +1065,12 @@ const Game = (() => {
       paintShips();
     });
     els.btnContinue.addEventListener("click", continueSavedRun);
+    els.btnEnter.addEventListener("click", enterHangar);
+    els.btnHelp.addEventListener("click", () => {
+      state = "help";
+      showView("help");
+    });
+    els.btnHelpBack.addEventListener("click", goMenu);
     els.btnOptions.addEventListener("click", openOptions);
     els.btnPauseOptions.addEventListener("click", openOptions);
     els.btnOptBack.addEventListener("click", closeOptions);
@@ -1146,6 +1159,9 @@ const Game = (() => {
     els.btnSurvival = document.getElementById("btn-survival");
     els.btnContinue = document.getElementById("btn-continue");
     els.btnRanks = document.getElementById("btn-ranks");
+    els.btnEnter = document.getElementById("btn-enter");
+    els.btnHelp = document.getElementById("btn-help");
+    els.btnHelpBack = document.getElementById("btn-help-back");
     els.btnOptions = document.getElementById("btn-options");
     els.btnPauseOptions = document.getElementById("btn-pause-options");
     els.btnOptBack = document.getElementById("btn-opt-back");
@@ -1194,7 +1210,13 @@ const Game = (() => {
     }
     bind();
     refreshTitle();
-    showView("title");
+    if (data().options.introSeen) {
+      state = "menu";
+      showView("title");
+    } else {
+      state = "splash";
+      showView("splash");
+    }
     syncMenuPointer();
     requestAnimationFrame(loop);
   }

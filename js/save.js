@@ -49,6 +49,7 @@ const Save = (() => {
       music: src.music === true,
       vibrate: src.vibrate !== false,
       stickSize: src.stickSize === "p" || src.stickSize === "g" ? src.stickSize : "m",
+      introSeen: src.introSeen === true,
       layout,
     };
   }
@@ -149,7 +150,7 @@ const Save = (() => {
 
   function setOptions(options) {
     const data = load();
-    data.options = mergeOptions(options);
+    data.options = mergeOptions({ ...data.options, ...(options || {}) });
     write(data);
     return data.options;
   }

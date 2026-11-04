@@ -424,6 +424,83 @@ body {
   color: var(--text);
 }
 
+.splash {
+  min-height: min(70vh, 520px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.splash h1 {
+  animation: splash-in 0.7s ease;
+}
+
+#btn-enter {
+  margin-top: 8px;
+  border: 0;
+  background: var(--cyan);
+  color: #041018;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  font-size: 16px;
+  min-height: 48px;
+  min-width: 180px;
+  cursor: pointer;
+}
+
+.btn-row.quiet {
+  margin-top: -8px;
+}
+
+.help-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 14px;
+  text-align: left;
+  margin: 0 0 18px;
+}
+
+.help-grid strong {
+  display: block;
+  margin-bottom: 8px;
+  letter-spacing: 0.08em;
+}
+
+.help-grid ul {
+  padding-left: 18px;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.help-grid li {
+  color: var(--text);
+}
+
+@media (max-width: 800px) {
+  .help-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .splash h1 {
+    animation: none;
+  }
+}
+
+@keyframes splash-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
 .kicker {
   letter-spacing: 0.28em;
   font-size: clamp(14px, 2vw, 16px);

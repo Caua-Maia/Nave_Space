@@ -11,7 +11,7 @@
     <link rel="manifest" href="manifest.json" />
     <link rel="icon" href="icons/icon-192.png" />
     <link rel="apple-touch-icon" href="icons/icon-192.png" />
-    <link rel="stylesheet" href="css/style.css?v=11" />
+    <link rel="stylesheet" href="css/style.css?v=12" />
   </head>
   <body>
     <div id="app">
@@ -58,7 +58,14 @@
       <div id="combo-flash"></div>
 
       <div id="overlay" class="overlay">
-        <div class="panel" data-view="title" id="view-title">
+        <div class="panel splash" data-view="splash" id="view-splash">
+          <p class="kicker">DUAL-STICK</p>
+          <h1>SPACE<br />SURVIVOR</h1>
+          <p class="subtitle">Formas no escuro. Mire, dispare e não pare.</p>
+          <button id="btn-enter" type="button">ENTRAR</button>
+        </div>
+
+        <div class="panel hidden" data-view="title" id="view-title">
           <p class="kicker">TWIN-STICK SHOOTER</p>
           <h1>SPACE<br />SURVIVOR</h1>
           <p class="subtitle">História com objetivos por fase, ou sobrevivência infinita com bosses.</p>
@@ -72,19 +79,27 @@
             <button id="btn-continue" type="button" class="hidden">CONTINUAR</button>
             <button id="btn-story" type="button">HISTÓRIA</button>
             <button id="btn-survival" type="button">SOBREVIVÊNCIA</button>
+          </div>
+          <div class="btn-row quiet">
             <button id="btn-ranks" type="button" class="ghost">RANKING</button>
             <button id="btn-options" type="button" class="ghost">CONFIGURAÇÕES</button>
+            <button id="btn-help" type="button" class="ghost">COMO JOGAR</button>
           </div>
 
           <p id="story-save" class="menu-pad"></p>
+        </div>
 
-          <div class="controls-grid">
+        <div class="panel hidden" data-view="help" id="view-help">
+          <p class="kicker">MANUAL</p>
+          <h1>COMO JOGAR</h1>
+          <p class="subtitle">Três jeitos de pilotar. O objetivo é o mesmo: sobreviver.</p>
+          <div class="help-grid">
             <div>
               <strong>DualShock 4</strong>
               <ul>
-                <li>Analógico esquerdo — mover 360°</li>
-                <li>Analógico direito — mirar</li>
-                <li>R2 — atirar (ou empurre o direito)</li>
+                <li>Esquerdo — mover</li>
+                <li>Direito — mirar</li>
+                <li>R2 — atirar</li>
                 <li>Options — pausar</li>
               </ul>
             </div>
@@ -93,13 +108,23 @@
               <ul>
                 <li>WASD — mover</li>
                 <li>Mouse — mirar</li>
-                <li>Clique / Espaço — atirar</li>
+                <li>Clique ou Espaço — atirar</li>
                 <li>Esc — pausar</li>
+              </ul>
+            </div>
+            <div>
+              <strong>Celular</strong>
+              <ul>
+                <li>Analógico esquerdo — mover</li>
+                <li>Analógico direito — mirar e atirar</li>
+                <li>Pausa fica na tela</li>
+                <li>Configurações arrasta o HUD</li>
               </ul>
             </div>
           </div>
           <p id="menu-pad" class="menu-pad">Conecte o DualShock 4 e aperte qualquer botão.</p>
-          <p class="hint">Clique na janela para o controle ser detectado. No celular, o analógico esquerdo move e o direito mira e atira. Progresso e ranking ficam neste navegador.</p>
+          <p class="hint">Clique na janela para o controle ser detectado. Progresso e ranking ficam neste navegador.</p>
+          <button id="btn-help-back" type="button" class="ghost">VOLTAR</button>
         </div>
 
         <div class="panel hidden" data-view="ships" id="view-ships">
@@ -224,15 +249,15 @@
       </div>
     </div>
 
-    <script src="js/audio.js?v=11"></script>
-    <script src="js/input.js?v=11"></script>
-    <script src="js/touch.js?v=11"></script>
-    <script src="js/entities.js?v=11"></script>
-    <script src="js/save.js?v=11"></script>
-    <script src="js/settings.js?v=11"></script>
-    <script src="js/story.js?v=11"></script>
-    <script src="js/game.js?v=11"></script>
-    <script src="js/main.js?v=11"></script>
+    <script src="js/audio.js?v=12"></script>
+    <script src="js/input.js?v=12"></script>
+    <script src="js/touch.js?v=12"></script>
+    <script src="js/entities.js?v=12"></script>
+    <script src="js/save.js?v=12"></script>
+    <script src="js/settings.js?v=12"></script>
+    <script src="js/story.js?v=12"></script>
+    <script src="js/game.js?v=12"></script>
+    <script src="js/main.js?v=12"></script>
     <script>
       if ("serviceWorker" in navigator) {
         navigator.serviceWorker.register("sw.js", { updateViaCache: "none" });
