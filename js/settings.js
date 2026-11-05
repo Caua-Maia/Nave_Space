@@ -22,6 +22,7 @@ const Settings = (() => {
   }
 
   function apply(options) {
+    if (typeof Platform !== "undefined") Platform.sync();
     const opt = options || current();
     AudioFx.setVolume(opt.volume);
     AudioFx.setMusic(opt.music);
@@ -119,7 +120,8 @@ const Settings = (() => {
     bar.id = "hud-edit-bar";
     bar.className = "hidden";
     bar.innerHTML =
-      "<p>Arraste cada peça para onde quiser.</p>" +
+      '<p class="mobile-only">Arraste vida, onda, analógicos e pausa.</p>' +
+      '<p class="desktop-only">Arraste vida, onda, score e tempo no HUD.</p>' +
       '<div class="btn-row">' +
       '<button type="button" id="hud-edit-reset" class="ghost">POSIÇÃO PADRÃO</button>' +
       '<button type="button" id="hud-edit-done">PRONTO</button>' +

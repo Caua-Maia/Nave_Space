@@ -1553,7 +1553,7 @@ const Game = (() => {
     const dt = Math.min(0.033, (t - last) / 1000 || 0.016);
     last = t;
     const input = Input.snapshot();
-    if (state === "menu") els.menuPad.textContent = Input.status();
+    if (state === "menu" && els.menuPad) els.menuPad.textContent = Input.status();
     update(dt, input);
     draw();
     requestAnimationFrame(loop);
@@ -1574,9 +1574,8 @@ const Game = (() => {
     root.style.setProperty("--vv-left", box.left + "px");
     root.style.setProperty("--vv-width", box.width + "px");
     root.style.setProperty("--vv-height", box.height + "px");
-    const handheld = typeof TouchControls !== "undefined" && TouchControls.isTouchDevice();
-    document.body.classList.toggle("handheld", !!handheld);
-    document.body.dataset.platform = handheld ? "mobile" : "desktop";
+    if (typeof Platform !== "undefined") Platform.sync();
+    const handheld = typeof Platform !== "undefined" ? Platform.isMobile() : TouchControls.isTouchDevice();
     document.body.classList.toggle("short-screen", !!handheld && box.height < 430);
     const dpr = Math.min(2, window.devicePixelRatio || 1);
     const nw = Math.max(1, Math.floor(box.width * dpr));
@@ -1665,7 +1664,9 @@ const Game = (() => {
     els.btnOptBack.addEventListener("click", closeOptions);
     els.btnOptLayout.addEventListener("click", openLayoutEdit);
     els.btnOptReset.addEventListener("click", () => Settings.reset());
-    els.btnOptTest.addEventListener("click", () => Settings.test());
+    const btnOptTestTouch = document.getElementById("btn-opt-test-touch");
+    if (els.btnOptTest) els.btnOptTest.addEventListener("click", () => Settings.test());
+    if (btnOptTestTouch) btnOptTestTouch.addEventListener("click", () => Settings.test());
     els.btnRanks.addEventListener("click", () => {
       fillRanks();
       state = "ranks";

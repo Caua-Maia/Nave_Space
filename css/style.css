@@ -429,10 +429,22 @@ body:not([data-layout-custom="1"]) #btn-fullscreen {
   margin: auto;
   overflow: visible;
   padding: clamp(14px, 3vh, 28px) clamp(12px, 3vw, 28px);
-  border: 1px solid rgba(77, 232, 255, 0.28);
-  background: rgba(8, 12, 24, 0.82);
-  backdrop-filter: blur(10px);
+  border: 1px solid rgba(77, 232, 255, 0.32);
+  border-radius: 6px;
+  background: linear-gradient(165deg, rgba(12, 18, 36, 0.94), rgba(6, 9, 18, 0.88));
+  box-shadow:
+    0 16px 48px rgba(0, 0, 0, 0.55),
+    inset 0 1px 0 rgba(77, 232, 255, 0.12);
+  backdrop-filter: blur(12px);
   text-align: center;
+}
+
+body[data-platform="desktop"] .panel {
+  width: min(560px, 96vw);
+}
+
+body[data-platform="desktop"] .help-grid {
+  grid-template-columns: 1fr 1fr;
 }
 
 .hidden {
@@ -471,6 +483,7 @@ body:not([data-layout-custom="1"]) #btn-fullscreen {
 .btn-row button,
 #btn-ranks-back {
   border: 0;
+  border-radius: 4px;
   background: var(--cyan);
   color: #041018;
   font-weight: 800;
@@ -481,6 +494,12 @@ body:not([data-layout-custom="1"]) #btn-fullscreen {
   cursor: pointer;
   flex: 1 1 148px;
   max-width: 100%;
+  transition: filter 0.15s ease, transform 0.12s ease;
+}
+
+body[data-platform="desktop"] .btn-row button:active,
+body[data-platform="desktop"] #btn-ranks-back:active {
+  transform: translateY(1px);
 }
 
 .btn-row button.ghost,
@@ -677,12 +696,56 @@ h1 {
   display: none;
 }
 
+body[data-platform="desktop"] .mobile-only,
 body[data-platform="desktop"] .opt-touch-only {
-  display: none;
+  display: none !important;
 }
 
-body[data-platform="mobile"] .help-desktop {
-  display: none;
+body[data-platform="mobile"] .desktop-only {
+  display: none !important;
+}
+
+body[data-platform="desktop"] #touch-ui,
+body[data-platform="desktop"] #btn-fullscreen,
+body[data-platform="desktop"] #touch-pause,
+body[data-platform="desktop"] #fs-hint {
+  display: none !important;
+  pointer-events: none !important;
+}
+
+body[data-platform="desktop"]:not([data-layout-custom="1"]) #hud {
+  padding: 12px 18px 10px;
+}
+
+body[data-platform="desktop"] #hud {
+  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.85);
+}
+
+body[data-platform="mobile"] #game {
+  cursor: default;
+}
+
+body[data-platform="desktop"] .overlay {
+  padding: 16px 20px;
+}
+
+body[data-platform="mobile"] .overlay {
+  padding: max(8px, env(safe-area-inset-top)) max(8px, env(safe-area-inset-right)) max(8px, env(safe-area-inset-bottom))
+    max(8px, env(safe-area-inset-left));
+  align-items: flex-start;
+}
+
+body[data-platform="mobile"] .panel {
+  margin-top: max(0px, env(safe-area-inset-top));
+  max-height: calc(var(--vv-height, 100dvh) - 16px);
+  overflow: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.muted-pad {
+  color: var(--muted) !important;
+  font-size: 13px !important;
+  letter-spacing: 0.06em !important;
 }
 
 .hint {

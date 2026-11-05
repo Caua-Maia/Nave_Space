@@ -8,20 +8,17 @@ const TouchControls = (() => {
   let fsBtn = null;
   let pauseEdge = false;
   let visible = false;
-  const handheld = detectHandheld();
-
-  function detectHandheld() {
+  function isTouchDevice() {
+    if (typeof Platform !== "undefined") return Platform.isMobile();
     const ua = navigator.userAgent || "";
     const iPad = navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1;
-    if (/Android|iPhone|iPad|iPod|Mobile/i.test(ua) || iPad) return true;
-    const fine = window.matchMedia("(any-pointer: fine)").matches;
-    const hover = window.matchMedia("(any-hover: hover)").matches;
-    if (fine || hover) return false;
+    if (/Android|iPhone|iPad|iPod|Mobile/i.test(ua) || iPad) {
+      const fine = window.matchMedia("(any-pointer: fine)").matches;
+      const hover = window.matchMedia("(any-hover: hover)").matches;
+      if (fine || hover) return false;
+      return true;
+    }
     return window.matchMedia("(pointer: coarse)").matches && window.matchMedia("(hover: none)").matches;
-  }
-
-  function isTouchDevice() {
-    return handheld;
   }
 
   function knobOf(which) {
@@ -171,6 +168,8 @@ const TouchControls = (() => {
 
   function mount() {
     if (document.getElementById("touch-ui")) return;
+    if (typeof Platform !== "undefined") Platform.sync();
+    if (!isTouchDevice()) return;
     const host = document.getElementById("app") || document.body;
     root = document.createElement("div");
     root.id = "touch-ui";
@@ -288,7 +287,7 @@ const TouchControls = (() => {
     if (!fsBtn) return;
     const standalone =
       window.matchMedia("(display-mode: standalone)").matches || window.navigator.standalone === true;
-    fsBtn.classList.toggle("hidden", !handheld || standalone);
+    fsBtn.classList.toggle("hidden", !isTouchDevice() || standalone);
     fsBtn.textContent = fullscreenElement() ? "JANELA" : "TELA CHEIA";
   }
 

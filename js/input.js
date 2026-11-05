@@ -95,7 +95,10 @@ const Input = (() => {
     const kLen = Math.hypot(moveX, moveY) || 1;
 
     const kbMove = { x: moveX / kLen, y: moveY / kLen, mag: Math.min(1, Math.hypot(moveX, moveY)) };
-    const desktop = typeof document !== "undefined" && document.body && document.body.dataset.platform === "desktop";
+    const desktop =
+      typeof Platform !== "undefined"
+        ? Platform.isDesktop()
+        : typeof document !== "undefined" && document.body && document.body.dataset.platform === "desktop";
     const move =
       pad && pad.left.mag > 0.02
         ? { x: pad.left.x, y: pad.left.y, mag: pad.left.mag }
@@ -159,7 +162,8 @@ const Input = (() => {
     attach,
     snapshot,
     status() {
-      const desktop = document.body && document.body.dataset.platform === "desktop";
+      const desktop =
+        typeof Platform !== "undefined" ? Platform.isDesktop() : document.body && document.body.dataset.platform === "desktop";
       if (!padName && !desktop && typeof TouchControls !== "undefined" && TouchControls.isTouchDevice()) {
         return "Controle: joysticks na tela";
       }

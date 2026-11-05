@@ -8,10 +8,28 @@
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <title>Dual-Stick Space Survivor</title>
+    <script>
+      (function () {
+        function detect() {
+          var ua = navigator.userAgent || "";
+          var iPad = navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1;
+          if (/Android|iPhone|iPad|iPod|Mobile/i.test(ua) || iPad) {
+            if (window.matchMedia("(any-pointer: fine)").matches || window.matchMedia("(any-hover: hover)").matches) {
+              return "desktop";
+            }
+          }
+          if (window.matchMedia("(pointer: coarse)").matches && window.matchMedia("(hover: none)").matches) {
+            return "mobile";
+          }
+          return "desktop";
+        }
+        document.documentElement.dataset.platform = detect();
+      })();
+    </script>
     <link rel="manifest" href="manifest.json" />
     <link rel="icon" href="icons/icon-192.png" />
     <link rel="apple-touch-icon" href="icons/icon-192.png" />
-    <link rel="stylesheet" href="css/style.css?v=22" />
+    <link rel="stylesheet" href="css/style.css?v=23" />
   </head>
   <body>
     <div id="app">
@@ -71,7 +89,8 @@
         <div class="panel hidden" data-view="title" id="view-title">
           <p class="kicker">TWIN-STICK SHOOTER</p>
           <h1>SPACE<br />SURVIVOR</h1>
-          <p class="subtitle">História com objetivos por fase, ou sobrevivência infinita com bosses.</p>
+          <p class="subtitle mobile-only">História, sobrevivência ou dois pilotos. Analógicos na tela na partida.</p>
+          <p class="subtitle desktop-only">História, sobrevivência ou dois pilotos. Teclado, mouse ou DualShock.</p>
 
           <label class="name-row">
             Nome do piloto
@@ -91,6 +110,7 @@
           </div>
 
           <p id="story-save" class="menu-pad"></p>
+          <p id="menu-pad" class="menu-pad muted-pad"></p>
         </div>
 
         <div class="panel hidden" data-view="link" id="view-link">
@@ -135,7 +155,7 @@
                 <li>Esc — pausar</li>
               </ul>
             </div>
-            <div>
+            <div class="mobile-only">
               <strong>Celular</strong>
               <ul>
                 <li>Fixo, segue o dedo, ou metade da tela</li>
@@ -145,9 +165,9 @@
               </ul>
             </div>
           </div>
-          <p id="menu-pad" class="menu-pad">Conecte o DualShock 4 e aperte qualquer botão.</p>
-          <p id="help-desktop" class="hint help-desktop">No PC: WASD ou setas para mover, mouse para mirar, clique ou Espaço para atirar, Esc para pausar.</p>
-          <p class="hint">Clique na janela para o controle ser detectado. Nome, nave, opções e ranking ficam salvos para todos.</p>
+          <p class="menu-pad desktop-only">WASD ou setas, mouse para mirar, Espaço ou clique para atirar. DualShock também funciona.</p>
+          <p class="menu-pad mobile-only">Na partida, use os analógicos na tela. Tela cheia e HUD mudam em Configurações.</p>
+          <p class="hint">Nome, nave, opções e ranking ficam salvos para todos.</p>
           <div class="btn-row">
             <button id="btn-help-back" type="button" class="ghost">VOLTAR</button>
           </div>
@@ -195,7 +215,8 @@
         <div class="panel hidden" data-view="options" id="view-options">
           <p class="kicker">OPÇÕES</p>
           <h1>CONFIGURAÇÕES</h1>
-          <p class="subtitle">Vale neste navegador. O HUD muda na hora, inclusive no meio da partida.</p>
+          <p class="subtitle mobile-only">Volume, toque e posição do HUD neste aparelho.</p>
+          <p class="subtitle desktop-only">Volume e posição do HUD. Teclado, mouse e controle seguem iguais.</p>
           <div class="opt-grid">
             <label>
               Volume <span id="opt-volume-num">70</span>
@@ -224,7 +245,8 @@
           <p class="hint help-desktop">No PC o HUD também pode ser reposicionado em EDITAR POSIÇÕES. Teclado, mouse e DualShock funcionam juntos.</p>
           <div class="btn-row">
             <button id="btn-opt-layout" type="button">EDITAR POSIÇÕES</button>
-            <button id="btn-opt-test" type="button" class="ghost">TESTAR SOM E VIBRAÇÃO</button>
+            <button id="btn-opt-test" type="button" class="ghost desktop-only">TESTAR SOM</button>
+            <button id="btn-opt-test-touch" type="button" class="ghost mobile-only opt-touch-only">TESTAR SOM E VIBRAÇÃO</button>
             <button id="btn-opt-reset" type="button" class="ghost">PADRÃO</button>
             <button id="btn-opt-back" type="button">VOLTAR</button>
           </div>
@@ -233,7 +255,8 @@
         <div class="panel hidden" data-view="pause" id="view-pause">
           <p class="kicker">PAUSADO</p>
           <h1>HOLD</h1>
-          <p class="subtitle" id="pause-hint">Salvar grava a partida inteira (onda, vida, score). Use CONTINUAR no menu.</p>
+          <p class="subtitle mobile-only" id="pause-hint">Salvar grava a partida. Botão PAUSA no canto ou volte aqui pelo menu.</p>
+          <p class="subtitle desktop-only">Salvar grava a partida inteira. Esc ou P pausam de novo a qualquer momento.</p>
           <div class="btn-row">
             <button id="btn-resume" type="button">CONTINUAR</button>
             <button id="btn-pause-save" type="button" class="ghost">SALVAR PROGRESSO</button>
@@ -285,17 +308,18 @@
       </div>
     </div>
 
-    <script src="js/audio.js?v=22"></script>
-    <script src="js/input.js?v=22"></script>
-    <script src="js/touch.js?v=22"></script>
-    <script src="js/entities.js?v=22"></script>
-    <script src="js/save.js?v=22"></script>
-    <script src="js/cloud.js?v=22"></script>
-    <script src="js/settings.js?v=22"></script>
-    <script src="js/story.js?v=22"></script>
-    <script src="js/net.js?v=22"></script>
-    <script src="js/game.js?v=22"></script>
-    <script src="js/main.js?v=22"></script>
+    <script src="js/audio.js?v=23"></script>
+    <script src="js/input.js?v=23"></script>
+    <script src="js/platform.js?v=23"></script>
+    <script src="js/touch.js?v=23"></script>
+    <script src="js/entities.js?v=23"></script>
+    <script src="js/save.js?v=23"></script>
+    <script src="js/cloud.js?v=23"></script>
+    <script src="js/settings.js?v=23"></script>
+    <script src="js/story.js?v=23"></script>
+    <script src="js/net.js?v=23"></script>
+    <script src="js/game.js?v=23"></script>
+    <script src="js/main.js?v=23"></script>
     <script>
       if ("serviceWorker" in navigator) {
         navigator.serviceWorker.register("sw.js", { updateViaCache: "none" });
