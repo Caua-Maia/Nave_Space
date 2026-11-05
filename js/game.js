@@ -39,6 +39,7 @@ const Game = (() => {
   let linkLive = false;
   let linkName = "Piloto";
   let linkShip = "lanca";
+  let linkHello = 0;
   let worldSeq = 1;
   const els = {};
 
@@ -553,6 +554,9 @@ const Game = (() => {
     linkLive = false;
     remote = null;
     remoteGoal = null;
+    clearInterval(linkHello);
+    linkHello = 0;
+    if (els.viewLink) els.viewLink.classList.remove("hosting");
     if (typeof Net !== "undefined" && Net.role()) Net.leave();
     if (mode === "link") mode = "survival";
   }
@@ -854,7 +858,7 @@ const Game = (() => {
       score,
       elapsed: q3(elapsed),
       tier: diffTier,
-      ghp: remote ? Math.ceil(remote.hp) : 0,
+      ghp: remote ? Math.ceil(remote.hp) : 100,
       rapid: remote ? q3(remote.rapid) : 0,
       shield: remote ? q3(remote.shield) : 0,
       multi: remote ? q3(remote.multi) : 0,
@@ -1027,10 +1031,47 @@ const Game = (() => {
     });
   }
 
-  function beginLinkMatch() {
-    if (linkLive) return;
+  function attachMate() {
     const mate = Net.mate();
-    if (!mate) return;
+    if (!mate || !player || !w) return;
+    const side = Net.role() === "host" ? 0.38 : 0.62;
+    if (!remote) {
+      remote = new Player(w * (1 - side), h * 0.5, mate.shipId);
+      remoteGoal = null;
+    } else if (mate.shipId && mate.shipId !== remote.shipId) {
+      const spec = shipById(mate.shipId);
+      remote.shipId = spec.id;
+      remote.color = spec.color;
+      remote.r = spec.r;
+    }
+    remote.pilotName = mate.name;
+  }
+
+  function startHelloPulse() {
+    clearInterval(linkHello);
+    pilotHello();
+    linkHello = setInterval(() => {
+      if (!linkLive) {
+        clearInterval(linkHello);
+        linkHello = 0;
+        return;
+      }
+      if (!Net.mate()) {
+        pilotHello();
+        return;
+      }
+      attachMate();
+      clearInterval(linkHello);
+      linkHello = 0;
+    }, 700);
+  }
+
+  function startLinkArena() {
+    if (linkLive) {
+      attachMate();
+      pilotHello();
+      return;
+    }
     linkLive = true;
     selectedShipId = linkShip;
     mode = "link";
@@ -1040,14 +1081,12 @@ const Game = (() => {
     const side = Net.role() === "host" ? 0.38 : 0.62;
     player.x = w * side;
     player.y = h * 0.5;
-    remote = new Player(w * (1 - side), h * 0.5, mate.shipId);
-    remote.pilotName = mate.name;
-    remoteGoal = null;
+    attachMate();
     linkAcc = 0;
     state = "play";
     hideOverlay();
     els.hud.classList.remove("hidden");
-    pilotHello();
+    startHelloPulse();
   }
 
   function openLink() {
@@ -1057,15 +1096,20 @@ const Game = (() => {
     state = "link";
     els.linkCode.value = "";
     els.linkRoom.textContent = "----";
-    els.linkStatus.textContent = "Crie uma sala ou entre com o código de quem já está esperando.";
+    els.linkStatus.textContent = "Crie a sala para jogar agora, ou entre com o código de quem já está no mapa.";
+    els.btnLinkHost.disabled = false;
+    els.btnLinkJoin.disabled = false;
     showView("link");
   }
 
   function createRoom() {
     rememberPilot();
+    els.btnLinkHost.disabled = true;
+    els.btnLinkJoin.disabled = true;
+    if (els.viewLink) els.viewLink.classList.add("hosting");
     const room = Net.makeCode();
     els.linkRoom.textContent = room;
-    els.linkStatus.textContent = "Abrindo sala " + room + "…";
+    els.linkStatus.textContent = "Sala " + room + ". Entrando no mapa…";
     Net.host(room);
   }
 
@@ -1076,6 +1120,8 @@ const Game = (() => {
       els.linkStatus.textContent = "O código tem 4 caracteres.";
       return;
     }
+    els.btnLinkHost.disabled = true;
+    els.btnLinkJoin.disabled = true;
     els.linkRoom.textContent = room;
     els.linkStatus.textContent = "Entrando na sala " + room + "…";
     Net.join(room);
@@ -1084,17 +1130,13 @@ const Game = (() => {
   function onNet(type, msg) {
     if (type === "ready") {
       els.linkRoom.textContent = msg.code || Net.code();
-      if (Net.role() === "host") {
-        els.linkStatus.textContent = "Sala " + Net.code() + ". Passe esse código para o outro piloto.";
-      }
     }
     if (type === "joined") {
-      els.linkStatus.textContent = "Conectado. Esperando o nome do outro piloto.";
-      pilotHello();
+      startLinkArena();
     }
     if (type === "peer") {
-      els.linkStatus.textContent = (msg.name || "Piloto") + " entrou.";
-      beginLinkMatch();
+      attachMate();
+      pilotHello();
     }
     if (type === "ship" && remote) {
       remoteGoal = {
@@ -1112,16 +1154,26 @@ const Game = (() => {
     if (type === "shot" && linkHost()) spawnRemoteShot(msg);
     if (type === "world") applyWorld(msg);
     if (type === "down" && (state === "play" || state === "pause")) gameOver();
-    if (type === "fail" && state === "link") {
+    if (type === "fail" && (state === "link" || (mode === "link" && !linkLive))) {
+      els.btnLinkHost.disabled = false;
+      els.btnLinkJoin.disabled = false;
+      if (els.viewLink) els.viewLink.classList.remove("hosting");
       els.linkStatus.textContent = msg.message || "Falha na sala.";
+      state = "link";
+      showView("link");
     }
     if (type === "gone" && (state === "play" || state === "pause") && mode === "link") {
       linkLive = false;
       remote = null;
       remoteGoal = null;
+      clearInterval(linkHello);
+      linkHello = 0;
       state = "link";
       els.hud.classList.add("hidden");
-      els.linkStatus.textContent = "O outro piloto saiu da sala.";
+      els.btnLinkHost.disabled = false;
+      els.btnLinkJoin.disabled = false;
+      if (els.viewLink) els.viewLink.classList.remove("hosting");
+      els.linkStatus.textContent = "A sala caiu. Crie de novo ou entre com o código.";
       showView("link");
     }
   }
@@ -1349,9 +1401,16 @@ const Game = (() => {
         bossName: bosses[0] && bosses[0].name,
       });
     } else if (mode === "link") {
-      els.wave.textContent = `ONDA ${wave} · T${diffTier}`;
-      const mate = remote && remote.pilotName ? remote.pilotName : "PARCEIRO";
-      els.objective.textContent = bosses.length ? `${mate} · BOSS: ${bosses[0].name}` : `${mate} · SOBREVIVÊNCIA`;
+      const room = Net.code() || "----";
+      els.wave.textContent = remote
+        ? `ONDA ${wave} · T${diffTier}`
+        : `SALA ${room}`;
+      const mate = remote && remote.pilotName ? remote.pilotName : "ESPERANDO O OUTRO";
+      els.objective.textContent = bosses.length
+        ? `${mate} · BOSS: ${bosses[0].name}`
+        : remote
+          ? `${mate} · SOBREVIVÊNCIA`
+          : `Passe ${room} para o outro piloto`;
     } else {
       els.wave.textContent = `ONDA ${wave} · T${diffTier}`;
       els.objective.textContent = bosses.length
@@ -1396,6 +1455,14 @@ const Game = (() => {
       ctx.font = "13px Segoe UI, sans-serif";
       ctx.textAlign = "center";
       ctx.fillText(remote.pilotName || "Piloto", remote.x, remote.y - remote.r - 16);
+      ctx.restore();
+    }
+    if (mode === "link" && (state === "play" || state === "pause") && Net.code()) {
+      ctx.save();
+      ctx.fillStyle = remote ? "rgba(215,246,255,0.55)" : "#4de8ff";
+      ctx.font = "bold 22px Segoe UI, sans-serif";
+      ctx.textAlign = "center";
+      ctx.fillText("SALA " + Net.code(), w * 0.5, 36);
       ctx.restore();
     }
     if (player && state !== "menu") {
@@ -1616,6 +1683,7 @@ const Game = (() => {
     els.linkCode = document.getElementById("link-code");
     els.linkRoom = document.getElementById("link-room");
     els.linkStatus = document.getElementById("link-status");
+    els.viewLink = document.getElementById("view-link");
     els.btnContinue = document.getElementById("btn-continue");
     els.btnRanks = document.getElementById("btn-ranks");
     els.btnEnter = document.getElementById("btn-enter");

@@ -10,6 +10,7 @@ const Net = (() => {
   let heartbeat = 0;
   let token = 0;
   let open = false;
+  let joinTries = 0;
 
   function emit(type, extra) {
     handler(type, extra || {});
@@ -17,7 +18,8 @@ const Net = (() => {
 
   function failMessage(text) {
     const msg = String(text || "");
-    if (/not found|does not exist|unauthorized|403/i.test(msg)) return "Sala não encontrada. Confira o código.";
+    if (role === "host") return "Não deu para abrir a sala. Tente de novo.";
+    if (/not found|does not exist|unauthorized|403/i.test(msg)) return "Não deu para entrar. Confira o código.";
     return "Sem ligação com a sala. Tente de novo.";
   }
 
@@ -49,12 +51,19 @@ const Net = (() => {
       const status = msg.payload && msg.payload.status;
       if (status === "ok") {
         open = true;
+        joinTries = 0;
         emit("ready", { code });
         emit("joined", {});
         return;
       }
       const reason = msg.payload && (msg.payload.response || msg.payload);
-      emit("fail", { message: failMessage(typeof reason === "string" ? reason : "erro") });
+      const text = typeof reason === "string" ? reason : JSON.stringify(reason || {});
+      if (/MissingPartition/i.test(text) && joinTries < 4 && socket && socket.readyState === 1) {
+        joinTries += 1;
+        setTimeout(() => sendJoin(), 500);
+        return;
+      }
+      emit("fail", { message: failMessage(text) });
       return;
     }
     if (msg.event === "broadcast") {
@@ -90,6 +99,28 @@ const Net = (() => {
     socket = null;
   }
 
+  function sendJoin() {
+    if (!socket || socket.readyState !== 1) return;
+    joinRef = String(++ref);
+    socket.send(
+      JSON.stringify({
+        topic,
+        event: "phx_join",
+        payload: {
+          config: {
+            broadcast: { ack: false, self: false },
+            presence: { enabled: false },
+            postgres_changes: [],
+            private: false,
+          },
+          access_token: Cloud.key(),
+        },
+        ref: joinRef,
+        join_ref: joinRef,
+      })
+    );
+  }
+
   function connect() {
     if (!Cloud.key() || Cloud.key().indexOf("PENDING") === 0) {
       emit("fail", { message: "Sala sem servidor. Tente de novo em instantes." });
@@ -97,7 +128,7 @@ const Net = (() => {
     }
     const mine = ++token;
     topic = "realtime:sala:" + code;
-    joinRef = String(++ref);
+    joinTries = 0;
     const ws =
       Cloud.url().replace("https://", "wss://") +
       "/realtime/v1/websocket?apikey=" +
@@ -106,22 +137,7 @@ const Net = (() => {
     socket = new WebSocket(ws);
     socket.onopen = () => {
       if (mine !== token) return;
-      socket.send(
-        JSON.stringify({
-          topic,
-          event: "phx_join",
-          payload: {
-            config: {
-              broadcast: { ack: false, self: false },
-              presence: { enabled: false },
-              private: true,
-            },
-            access_token: Cloud.key(),
-          },
-          ref: joinRef,
-          join_ref: joinRef,
-        })
-      );
+      sendJoin();
       heartbeat = setInterval(() => sendRaw("heartbeat", {}, false), 25000);
     };
     socket.onmessage = (event) => {

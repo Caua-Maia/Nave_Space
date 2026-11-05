@@ -672,6 +672,11 @@ h1 {
   font-weight: 800;
 }
 
+#view-link.hosting .link-join,
+#view-link.hosting #btn-link-join {
+  display: none;
+}
+
 .hint {
   margin-top: 14px;
   font-size: clamp(14px, 2vw, 16px);

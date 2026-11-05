@@ -11,7 +11,7 @@
     <link rel="manifest" href="manifest.json" />
     <link rel="icon" href="icons/icon-192.png" />
     <link rel="apple-touch-icon" href="icons/icon-192.png" />
-    <link rel="stylesheet" href="css/style.css?v=19" />
+    <link rel="stylesheet" href="css/style.css?v=20" />
   </head>
   <body>
     <div id="app">
@@ -96,16 +96,18 @@
         <div class="panel hidden" data-view="link" id="view-link">
           <p class="kicker">MESMO MAPA</p>
           <h1>DOIS PILOTOS</h1>
-          <p class="subtitle">Um cria a sala e passa o código. O outro entra. Os dois veem as naves e os inimigos da sobrevivência.</p>
+          <p class="subtitle">Quem cria entra no mapa na hora. O código aparece na tela. O outro só coloca o código e entra.</p>
           <p id="link-room" class="link-room">----</p>
-          <p id="link-status" class="hint">Crie uma sala ou entre com o código de quem já está esperando.</p>
-          <label class="name-row">
-            Código da sala
+          <p id="link-status" class="hint">Crie a sala para jogar agora, ou entre com o código de quem já está no mapa.</p>
+          <div class="btn-row">
+            <button id="btn-link-host" type="button">CRIAR SALA</button>
+          </div>
+          <label class="name-row link-join">
+            Só o segundo piloto coloca o código
             <input id="link-code" type="text" maxlength="4" placeholder="AB7K" autocomplete="off" autocapitalize="characters" />
           </label>
           <div class="btn-row">
-            <button id="btn-link-host" type="button">CRIAR SALA</button>
-            <button id="btn-link-join" type="button">ENTRAR</button>
+            <button id="btn-link-join" type="button">ENTRAR COM O CÓDIGO</button>
             <button id="btn-link-back" type="button" class="ghost">VOLTAR</button>
           </div>
         </div>
@@ -280,17 +282,17 @@
       </div>
     </div>
 
-    <script src="js/audio.js?v=19"></script>
-    <script src="js/input.js?v=19"></script>
-    <script src="js/touch.js?v=19"></script>
-    <script src="js/entities.js?v=19"></script>
-    <script src="js/save.js?v=19"></script>
-    <script src="js/cloud.js?v=19"></script>
-    <script src="js/settings.js?v=19"></script>
-    <script src="js/story.js?v=19"></script>
-    <script src="js/net.js?v=19"></script>
-    <script src="js/game.js?v=19"></script>
-    <script src="js/main.js?v=19"></script>
+    <script src="js/audio.js?v=20"></script>
+    <script src="js/input.js?v=20"></script>
+    <script src="js/touch.js?v=20"></script>
+    <script src="js/entities.js?v=20"></script>
+    <script src="js/save.js?v=20"></script>
+    <script src="js/cloud.js?v=20"></script>
+    <script src="js/settings.js?v=20"></script>
+    <script src="js/story.js?v=20"></script>
+    <script src="js/net.js?v=20"></script>
+    <script src="js/game.js?v=20"></script>
+    <script src="js/main.js?v=20"></script>
     <script>
       if ("serviceWorker" in navigator) {
         navigator.serviceWorker.register("sw.js", { updateViaCache: "none" });
