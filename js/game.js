@@ -801,7 +801,7 @@ const Game = (() => {
     let n = ship.shots;
     let spread = ship.spread || 0.18;
     if (ship.multi > 0 && ship.shipId === "lanca") n = 3;
-    if (ship.multi > 0 && ship.shipId === "bastiao") n = 2;
+    if (ship.multi > 0 && ship.shipId === "bastiao") n = 3;
     const out = [];
     for (let i = 0; i < n; i++) {
       out.push(aim + (n === 1 ? 0 : (i - (n - 1) / 2) * spread));
@@ -836,7 +836,7 @@ const Game = (() => {
         dmg
       );
       if (ship.shipId === "dardo") b.r = 2.2;
-      if (ship.shipId === "bastiao") b.r = 4;
+      if (ship.shipId === "bastiao") b.r = 4.4;
       if (mode === "link") b.owner = owner;
       bullets.push(b);
     });
