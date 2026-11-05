@@ -9,6 +9,7 @@ const Save = (() => {
       vibrate: true,
       stickSize: "m",
       touchMode: "fixed",
+      layoutCustom: false,
       layout: {
         vital: { x: 2, y: 2 },
         score: { x: 2, y: 16 },
@@ -52,6 +53,7 @@ const Save = (() => {
       stickSize: src.stickSize === "p" || src.stickSize === "g" ? src.stickSize : "m",
       touchMode: src.touchMode === "follow" || src.touchMode === "split" ? src.touchMode : "fixed",
       introSeen: src.introSeen === true,
+      layoutCustom: src.layoutCustom === true,
       layout,
     };
   }

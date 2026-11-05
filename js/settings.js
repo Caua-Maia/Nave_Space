@@ -27,8 +27,18 @@ const Settings = (() => {
     AudioFx.setMusic(opt.music);
     document.body.dataset.stickSize = opt.stickSize;
     document.body.dataset.touchMode = opt.touchMode || "fixed";
+    const custom = !!(opt.layoutCustom || editing);
+    document.body.dataset.layoutCustom = custom ? "1" : "0";
     document.querySelectorAll("[data-layout]").forEach((el) => {
-      place(el, opt.layout[el.dataset.layout]);
+      if (custom) {
+        place(el, opt.layout[el.dataset.layout]);
+      } else {
+        el.style.left = "";
+        el.style.top = "";
+        el.style.right = "";
+        el.style.bottom = "";
+        el.style.transform = "";
+      }
     });
   }
 
@@ -87,6 +97,7 @@ const Settings = (() => {
       const x = Math.max(0, Math.min(maxX, ((event.clientX - grabX - box.left) / box.width) * 100));
       const y = Math.max(0, Math.min(maxY, ((event.clientY - grabY - box.top) / box.height) * 100));
       const spot = { x: Math.round(x * 10) / 10, y: Math.round(y * 10) / 10 };
+      draft.layoutCustom = true;
       draft.layout[el.dataset.layout] = spot;
       place(el, spot);
     });
@@ -143,6 +154,7 @@ const Settings = (() => {
     const base = Save.defaultOptions();
     const opt = editing && draft ? draft : current();
     opt.layout = base.layout;
+    opt.layoutCustom = false;
     if (editing) draft = opt;
     Save.setOptions(opt);
     apply(opt);
