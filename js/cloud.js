@@ -103,29 +103,49 @@ const Cloud = (() => {
       .catch(() => false);
   }
 
+  function dedupeScores(rows) {
+    const best = new Map();
+    (rows || []).forEach((row) => {
+      const name = String(row.name || "ANÔNIMO").slice(0, 16);
+      const key = name.toLowerCase();
+      const entry = {
+        name,
+        score: row.score | 0,
+        extra: row.extra || "",
+        shipId: row.ship_id,
+      };
+      const cur = best.get(key);
+      if (!cur || entry.score > cur.score) best.set(key, entry);
+    });
+    return Array.from(best.values())
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 10);
+  }
+
   function board(mode) {
     const query =
       "/rest/v1/scores?mode=eq." +
       mode +
-      "&select=name,score,extra,ship_id&order=score.desc&limit=10";
+      "&select=name,score,extra,ship_id&order=score.desc&limit=40";
     return fetch(URL + query, { headers: headers() })
-      .then((res) => (res.ok ? res.json() : []))
-      .then((rows) =>
-        (rows || []).map((row) => ({
-          name: row.name,
-          score: row.score | 0,
-          extra: row.extra || "",
-          shipId: row.ship_id,
-        }))
+      .then((res) => {
+        if (!res.ok) return { ok: false, rows: [] };
+        return res.json().then((rows) => ({ ok: true, rows: rows || [] }));
+      })
+      .then((pack) =>
+        pack.ok
+          ? { ok: true, list: dedupeScores(pack.rows) }
+          : { ok: false, list: [] }
       )
-      .catch(() => []);
+      .catch(() => ({ ok: false, list: [] }));
   }
 
   function boards() {
-    if (KEY.indexOf("PENDING") === 0) return Promise.resolve(null);
+    if (KEY.indexOf("PENDING") === 0) return Promise.resolve({ ok: false, survival: [], story: [] });
     return Promise.all([board("survival"), board("story")]).then((pair) => ({
-      survival: pair[0],
-      story: pair[1],
+      ok: pair[0].ok && pair[1].ok,
+      survival: pair[0].list,
+      story: pair[1].list,
     }));
   }
 

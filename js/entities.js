@@ -165,7 +165,7 @@ class Boss {
       this.hp = 48;
       this.maxHp = 48;
       this.speed = 55;
-      this.color = "#ffb347";
+      this.color = "#ff8844";
       this.score = 900;
     } else if (kind === "mini_hunter") {
       this.name = "INTERCEPTADOR";
@@ -192,7 +192,7 @@ class Boss {
       this.hp = 150;
       this.maxHp = 150;
       this.speed = 60;
-      this.color = "#4de8ff";
+      this.color = "#6688ff";
       this.score = 4000;
     }
   }
@@ -287,7 +287,12 @@ class Boss {
   }
 }
 
-const ENEMY_TIER_COLORS = ["#7dff9a", "#c084fc", "#4de8ff", "#ffe566", "#ffb347", "#ff4d9a", "#ff5a3c"];
+const ENEMY_TIER_COLORS = ["#9dffb8", "#b088ff", "#6688ff", "#ffcc44", "#ff8844", "#ff4466", "#ff2200"];
+
+const PILOT_SLOT_COLORS = {
+  host: "#5cffd1",
+  guest: "#ff70dc",
+};
 
 function enemyTierColor(scale) {
   const i = Math.max(0, Math.min(ENEMY_TIER_COLORS.length - 1, Math.floor(scale) - 1));
@@ -434,49 +439,63 @@ const SHIP_ROSTER = [
   {
     id: "lanca",
     name: "Lança",
-    blurb: "A nave clássica. Equilíbrio entre velocidade, vida e um tiro frontal que vira leque com o pickup T.",
-    hp: 100,
-    speed: 340,
-    acc: 980,
+    blurb: "Equilíbrio. Com o T, três tiros em leque. Boa para quem quer controle e dano constante.",
+    hp: 105,
+    speed: 350,
+    acc: 1000,
     r: 14,
-    gap: 0.13,
+    gap: 0.12,
     shots: 1,
-    spread: 0.18,
-    bulletSpeed: 620,
+    spread: 0.2,
+    bulletSpeed: 640,
+    bulletDmg: 16,
     color: "#4de8ff",
   },
   {
     id: "dardo",
     name: "Dardo",
-    blurb: "Losango rápido e frágil. Rajada fina e veloz, sempre em linha reta. Cabe em espaços apertados.",
-    hp: 70,
-    speed: 460,
-    acc: 1400,
+    blurb: "Rápida e frágil. Com o T, dispara para frente e para trás ao mesmo tempo.",
+    hp: 78,
+    speed: 480,
+    acc: 1500,
     r: 10,
-    gap: 0.07,
+    gap: 0.065,
     shots: 1,
     spread: 0,
-    bulletSpeed: 920,
-    color: "#e8ff6a",
+    bulletSpeed: 940,
+    bulletDmg: 19,
+    color: "#d4ff4d",
   },
   {
     id: "bastiao",
     name: "Bastião",
-    blurb: "Hexágono pesado. Mais vida, anda devagar e dispara dois canhões laterais o tempo todo.",
-    hp: 150,
-    speed: 250,
-    acc: 720,
-    r: 18,
-    gap: 0.18,
-    shots: 2,
-    spread: 0.28,
-    bulletSpeed: 520,
-    color: "#ffb347",
+    blurb: "Tanque moderado. Um tiro largo; com o T, dois canhões frontais. Resistente, mas não imortal.",
+    hp: 115,
+    speed: 265,
+    acc: 780,
+    r: 17,
+    gap: 0.17,
+    shots: 1,
+    spread: 0.14,
+    bulletSpeed: 540,
+    bulletDmg: 15,
+    color: "#ff9f3d",
   },
 ];
 
 function shipById(id) {
   return SHIP_ROSTER.find((s) => s.id === id) || SHIP_ROSTER[0];
+}
+
+function pilotColorFor(slot) {
+  return slot === "host" || slot === "guest" ? PILOT_SLOT_COLORS[slot] : "";
+}
+
+function setPilotSlot(ship, slot) {
+  if (!ship) return;
+  const tint = pilotColorFor(slot);
+  ship.pilotColor = tint || ship.color;
+  ship.pilotRing = tint ? "#ffffff" : "rgba(255,255,255,0.55)";
 }
 
 class PowerUp {
@@ -515,6 +534,9 @@ class Player {
     this.shipId = spec.id;
     this.shipName = spec.name;
     this.color = spec.color;
+    this.pilotColor = spec.color;
+    this.pilotRing = "rgba(255,255,255,0.55)";
+    this.bulletDmg = spec.bulletDmg || 16;
     this.x = x;
     this.y = y;
     this.vx = 0;
@@ -575,8 +597,11 @@ class Player {
     ctx.translate(this.x, this.y);
     ctx.rotate(this.aim);
     if (this.iframes > 0 && ((this.iframes * 18) | 0) % 2 === 0) ctx.globalAlpha = 0.35;
-    ctx.strokeStyle = this.color;
-    ctx.lineWidth = 2.4;
+    const stroke = this.pilotColor || this.color;
+    ctx.strokeStyle = stroke;
+    ctx.lineWidth = 2.8;
+    ctx.shadowColor = stroke;
+    ctx.shadowBlur = 12;
     ctx.beginPath();
     const r = this.r + 2;
     if (this.shipId === "dardo") {
@@ -599,6 +624,10 @@ class Player {
       ctx.lineTo(-r * 0.85, -r * 0.75);
     }
     ctx.closePath();
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+    ctx.strokeStyle = this.pilotRing || "rgba(255,255,255,0.55)";
+    ctx.lineWidth = 1.2;
     ctx.stroke();
     if (this.shield > 0) {
       ctx.strokeStyle = "rgba(124,255,178,0.7)";

@@ -142,6 +142,7 @@ const Save = (() => {
       name: (entry.name || data.name || "ANÔNIMO").slice(0, 16),
       score: entry.score | 0,
       extra: entry.extra || "",
+      shipId: entry.shipId || data.shipId || "lanca",
       date: Date.now(),
     });
     list.sort((a, b) => b.score - a.score);

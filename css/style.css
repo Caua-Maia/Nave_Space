@@ -677,6 +677,14 @@ h1 {
   display: none;
 }
 
+body[data-platform="desktop"] .opt-touch-only {
+  display: none;
+}
+
+body[data-platform="mobile"] .help-desktop {
+  display: none;
+}
+
 .hint {
   margin-top: 14px;
   font-size: clamp(14px, 2vw, 16px);

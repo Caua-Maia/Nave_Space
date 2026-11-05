@@ -11,7 +11,7 @@
     <link rel="manifest" href="manifest.json" />
     <link rel="icon" href="icons/icon-192.png" />
     <link rel="apple-touch-icon" href="icons/icon-192.png" />
-    <link rel="stylesheet" href="css/style.css?v=20" />
+    <link rel="stylesheet" href="css/style.css?v=21" />
   </head>
   <body>
     <div id="app">
@@ -146,6 +146,7 @@
             </div>
           </div>
           <p id="menu-pad" class="menu-pad">Conecte o DualShock 4 e aperte qualquer botão.</p>
+          <p id="help-desktop" class="hint help-desktop">No PC: WASD ou setas para mover, mouse para mirar, clique ou Espaço para atirar, Esc para pausar.</p>
           <p class="hint">Clique na janela para o controle ser detectado. Nome, nave, opções e ranking ficam salvos para todos.</p>
           <div class="btn-row">
             <button id="btn-help-back" type="button" class="ghost">VOLTAR</button>
@@ -187,6 +188,7 @@
               <ol id="rank-story"></ol>
             </div>
           </div>
+          <p id="rank-note" class="hint"></p>
           <button id="btn-ranks-back" type="button" class="ghost">VOLTAR</button>
         </div>
 
@@ -200,8 +202,8 @@
               <input id="opt-volume" type="range" min="0" max="100" value="70" />
             </label>
             <label class="opt-check"><input id="opt-music" type="checkbox" /> Música</label>
-            <label class="opt-check"><input id="opt-vibrate" type="checkbox" /> Vibração no celular</label>
-            <label>
+            <label class="opt-check opt-touch-only"><input id="opt-vibrate" type="checkbox" /> Vibração no celular</label>
+            <label class="opt-touch-only">
               Tamanho dos analógicos
               <select id="opt-stick-size">
                 <option value="p">Pequeno</option>
@@ -209,7 +211,7 @@
                 <option value="g">Grande</option>
               </select>
             </label>
-            <label>
+            <label class="opt-touch-only">
               Controle no celular
               <select id="opt-touch-mode">
                 <option value="fixed">Analógicos fixos</option>
@@ -218,7 +220,8 @@
               </select>
             </label>
           </div>
-          <p class="hint">O HUD não tem lugar fixo. Entre em EDITAR POSIÇÕES e arraste vida, onda, analógicos, pausa e o resto para qualquer ponto da tela.</p>
+          <p class="hint opt-touch-only">O HUD não tem lugar fixo. Entre em EDITAR POSIÇÕES e arraste vida, onda, analógicos, pausa e o resto para qualquer ponto da tela.</p>
+          <p class="hint help-desktop">No PC o HUD também pode ser reposicionado em EDITAR POSIÇÕES. Teclado, mouse e DualShock funcionam juntos.</p>
           <div class="btn-row">
             <button id="btn-opt-layout" type="button">EDITAR POSIÇÕES</button>
             <button id="btn-opt-test" type="button" class="ghost">TESTAR SOM E VIBRAÇÃO</button>
@@ -243,7 +246,7 @@
           <p class="kicker">TRANSMISSÃO PERDIDA</p>
           <h1>GAME OVER</h1>
           <p class="subtitle" id="over-text"></p>
-          <label class="name-row">
+          <label class="name-row" id="over-name-row">
             Salvar no ranking como
             <input id="over-name" type="text" maxlength="16" placeholder="Seu nome" autocomplete="off" />
           </label>
@@ -282,17 +285,17 @@
       </div>
     </div>
 
-    <script src="js/audio.js?v=20"></script>
-    <script src="js/input.js?v=20"></script>
-    <script src="js/touch.js?v=20"></script>
-    <script src="js/entities.js?v=20"></script>
-    <script src="js/save.js?v=20"></script>
-    <script src="js/cloud.js?v=20"></script>
-    <script src="js/settings.js?v=20"></script>
-    <script src="js/story.js?v=20"></script>
-    <script src="js/net.js?v=20"></script>
-    <script src="js/game.js?v=20"></script>
-    <script src="js/main.js?v=20"></script>
+    <script src="js/audio.js?v=21"></script>
+    <script src="js/input.js?v=21"></script>
+    <script src="js/touch.js?v=21"></script>
+    <script src="js/entities.js?v=21"></script>
+    <script src="js/save.js?v=21"></script>
+    <script src="js/cloud.js?v=21"></script>
+    <script src="js/settings.js?v=21"></script>
+    <script src="js/story.js?v=21"></script>
+    <script src="js/net.js?v=21"></script>
+    <script src="js/game.js?v=21"></script>
+    <script src="js/main.js?v=21"></script>
     <script>
       if ("serviceWorker" in navigator) {
         navigator.serviceWorker.register("sw.js", { updateViaCache: "none" });

@@ -326,9 +326,35 @@ const Game = (() => {
     }
   }
 
+  function dedupeLocalBoard(list) {
+    const best = new Map();
+    (list || []).forEach((row) => {
+      const name = String(row.name || "ANÔNIMO").slice(0, 16);
+      const key = name.toLowerCase();
+      const entry = {
+        name,
+        score: row.score | 0,
+        extra: row.extra || "",
+        shipId: row.shipId,
+      };
+      const cur = best.get(key);
+      if (!cur || entry.score > cur.score) best.set(key, entry);
+    });
+    return Array.from(best.values())
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 10);
+  }
+
+  function shipRankLabel(id) {
+    const spec = shipById(id);
+    return spec && spec.name ? spec.name : "";
+  }
+
   function fillRanks() {
-    const line = (e) =>
-      `${e.name} — ${e.score.toLocaleString("pt-BR")}${e.extra ? " · " + e.extra : ""}${e.shipId ? " · " + e.shipId : ""}`;
+    const line = (e) => {
+      const ship = shipRankLabel(e.shipId);
+      return `${e.name} — ${e.score.toLocaleString("pt-BR")}${e.extra ? " · " + e.extra : ""}${ship ? " · " + ship : ""}`;
+    };
     const paint = (survival, story) => {
       els.rankSurvival.innerHTML = survival.length
         ? survival.map((e) => `<li>${line(e)}</li>`).join("")
@@ -337,11 +363,20 @@ const Game = (() => {
         ? story.map((e) => `<li>${line(e)}</li>`).join("")
         : "<li>Nenhum registro ainda</li>";
     };
+    if (els.rankNote) els.rankNote.textContent = "Carregando ranking global…";
     const s = data();
-    paint(s.survivalBoard, s.storyBoard);
-    if (typeof Cloud === "undefined") return;
+    paint(dedupeLocalBoard(s.survivalBoard), dedupeLocalBoard(s.storyBoard));
+    if (typeof Cloud === "undefined") {
+      if (els.rankNote) els.rankNote.textContent = "Ranking só neste aparelho.";
+      return;
+    }
     Cloud.boards().then((boards) => {
-      if (!boards || state !== "ranks") return;
+      if (state !== "ranks") return;
+      if (!boards || !boards.ok) {
+        if (els.rankNote) els.rankNote.textContent = "Nuvem offline — mostrando só este aparelho.";
+        return;
+      }
+      if (els.rankNote) els.rankNote.textContent = "Top 10 global (melhor score por piloto).";
       paint(boards.survival, boards.story);
     });
   }
@@ -468,11 +503,15 @@ const Game = (() => {
     stageStartScore = 0;
     lastBossWave = 0;
     resetArena();
+    setPilotSlot(player, "");
+    if (els.btnSaveScore) els.btnSaveScore.classList.remove("hidden");
+    if (els.overNameRow) els.overNameRow.classList.remove("hidden");
     state = "play";
     hideOverlay();
     els.hud.classList.remove("hidden");
     refreshTitle();
   }
+
 
   function openStoryBrief() {
     AudioFx.resume();
@@ -499,6 +538,7 @@ const Game = (() => {
     stageStartScore = score;
     lastBossWave = 0;
     resetArena();
+    setPilotSlot(player, "");
     if (Story.get(id).type === "boss") spawnEnemy = 2.5;
     state = "play";
     hideOverlay();
@@ -580,12 +620,16 @@ const Game = (() => {
     els.saveMsg.textContent = "";
     const s = data();
     els.overName.value = s.name;
-    if (mode === "story") {
+    if (mode === "link") {
+      els.overText.textContent = `Dois pilotos · score ${score.toLocaleString("pt-BR")} · onda ${wave} · ${formatTime(elapsed)}`;
+    } else if (mode === "story") {
       persistStory({ nextStage: stageId, campaignScore: stageStartScore });
       els.overText.textContent = `Fase ${stageId} · score da run ${score.toLocaleString("pt-BR")} · ao tentar de novo você volta ao início desta fase`;
     } else {
       els.overText.textContent = `Score ${score.toLocaleString("pt-BR")} · onda ${wave} · ${formatTime(elapsed)}`;
     }
+    if (els.btnSaveScore) els.btnSaveScore.classList.toggle("hidden", mode === "link");
+    if (els.overNameRow) els.overNameRow.classList.toggle("hidden", mode === "link");
     els.hud.classList.add("hidden");
     showView("over");
   }
@@ -750,6 +794,65 @@ const Game = (() => {
     }
   }
 
+  function shotAnglesFor(ship, aim, dualBack) {
+    if (dualBack || (ship.multi > 0 && ship.shipId === "dardo")) {
+      return [aim, aim + Math.PI];
+    }
+    let n = ship.shots;
+    let spread = ship.spread || 0.18;
+    if (ship.multi > 0 && ship.shipId === "lanca") n = 3;
+    if (ship.multi > 0 && ship.shipId === "bastiao") n = 2;
+    const out = [];
+    for (let i = 0; i < n; i++) {
+      out.push(aim + (n === 1 ? 0 : (i - (n - 1) / 2) * spread));
+    }
+    return out;
+  }
+
+  function anglesFromShotMsg(msg, ship, aim) {
+    if (msg.dual) return [aim, aim + Math.PI];
+    const n = Math.max(1, Math.min(5, msg.n | 0));
+    if (n > 1) {
+      const spread = Number(msg.spread) || 0;
+      const out = [];
+      for (let i = 0; i < n; i++) out.push(aim + (i - (n - 1) / 2) * spread);
+      return out;
+    }
+    return [aim];
+  }
+
+  function spawnBulletsFor(ship, x, y, aim, owner, msg) {
+    const tint = ship.pilotColor || ship.color;
+    const dmg = ship.bulletDmg || 16;
+    const angles = msg ? anglesFromShotMsg(msg, ship, aim) : shotAnglesFor(ship, aim);
+    angles.forEach((a) => {
+      const b = new Bullet(
+        x + Math.cos(a) * 18,
+        y + Math.sin(a) * 18,
+        a,
+        ship.bulletSpeed,
+        true,
+        tint,
+        dmg
+      );
+      if (ship.shipId === "dardo") b.r = 2.2;
+      if (ship.shipId === "bastiao") b.r = 4;
+      if (mode === "link") b.owner = owner;
+      bullets.push(b);
+    });
+    return {
+      t: "shot",
+      x: w ? x / w : 0.5,
+      y: h ? y / h : 0.5,
+      aim,
+      n: angles.length,
+      spread: ship.spread || 0,
+      speed: ship.bulletSpeed,
+      shipId: ship.shipId,
+      dual: ship.multi > 0 && ship.shipId === "dardo" ? 1 : 0,
+    };
+  }
+
   function tryShoot(input) {
     let aimX = 0;
     let aimY = 0;
@@ -781,36 +884,10 @@ const Game = (() => {
     if (!want || player.cool > 0) return;
     const gap = player.rapid > 0 ? player.gap * 0.55 : player.gap;
     player.cool = gap;
-    let n = player.shots;
-    if (player.multi > 0 && player.shipId === "lanca") n = 3;
-    if (player.multi > 0 && player.shipId === "bastiao") n = 3;
-    const spread = player.spread || 0.18;
-    for (let i = 0; i < n; i++) {
-      const a = player.aim + (n === 1 ? 0 : (i - (n - 1) / 2) * spread);
-      const b = new Bullet(
-        player.x + Math.cos(a) * 18,
-        player.y + Math.sin(a) * 18,
-        a,
-        player.bulletSpeed,
-        true,
-        player.color
-      );
-      if (player.shipId === "dardo") b.r = 2.2;
-      if (player.shipId === "bastiao") b.r = 4.4;
-      if (mode === "link") b.owner = Net.role() === "host" ? 0 : 1;
-      bullets.push(b);
-    }
+    const owner = mode === "link" && Net.role() === "guest" ? 1 : 0;
+    const shotMsg = spawnBulletsFor(player, player.x, player.y, player.aim, owner);
     AudioFx.shoot();
-    return {
-      t: "shot",
-      x: w ? player.x / w : 0.5,
-      y: h ? player.y / h : 0.5,
-      aim: player.aim,
-      n,
-      spread,
-      speed: player.bulletSpeed,
-      shipId: player.shipId,
-    };
+    return shotMsg;
   }
 
   function spawnRemoteShot(msg) {
@@ -819,17 +896,10 @@ const Game = (() => {
     const x = Number(msg.x) * w;
     const y = Number(msg.y) * h;
     const aim = Number(msg.aim) || 0;
-    const n = Math.max(1, Math.min(5, msg.n | 0));
-    const spread = Number(msg.spread) || 0;
-    const speed = Number(msg.speed) || spec.bulletSpeed;
-    for (let i = 0; i < n; i++) {
-      const a = aim + (n === 1 ? 0 : (i - (n - 1) / 2) * spread);
-      const b = new Bullet(x + Math.cos(a) * 18, y + Math.sin(a) * 18, a, speed, true, spec.color);
-      b.owner = 1;
-      if (spec.id === "dardo") b.r = 2.2;
-      if (spec.id === "bastiao") b.r = 4.4;
-      bullets.push(b);
-    }
+    remote.shipId = spec.id;
+    remote.bulletSpeed = Number(msg.speed) || spec.bulletSpeed;
+    remote.bulletDmg = spec.bulletDmg || 16;
+    spawnBulletsFor(remote, x, y, aim, 1, msg);
   }
 
   function easeRemote(dt) {
@@ -1045,6 +1115,7 @@ const Game = (() => {
       remote.r = spec.r;
     }
     remote.pilotName = mate.name;
+    setPilotSlot(remote, Net.role() === "host" ? "guest" : "host");
   }
 
   function startHelloPulse() {
@@ -1081,6 +1152,7 @@ const Game = (() => {
     const side = Net.role() === "host" ? 0.38 : 0.62;
     player.x = w * side;
     player.y = h * 0.5;
+    setPilotSlot(player, Net.role() === "host" ? "host" : "guest");
     attachMate();
     linkAcc = 0;
     state = "play";
@@ -1504,6 +1576,7 @@ const Game = (() => {
     root.style.setProperty("--vv-height", box.height + "px");
     const handheld = typeof TouchControls !== "undefined" && TouchControls.isTouchDevice();
     document.body.classList.toggle("handheld", !!handheld);
+    document.body.dataset.platform = handheld ? "mobile" : "desktop";
     document.body.classList.toggle("short-screen", !!handheld && box.height < 430);
     const dpr = Math.min(2, window.devicePixelRatio || 1);
     const nw = Math.max(1, Math.floor(box.width * dpr));
@@ -1616,16 +1689,18 @@ const Game = (() => {
       goMenu();
     });
     els.btnSaveScore.addEventListener("click", () => {
+      if (mode === "link") return;
       const name = commitName(els.overName.value);
+      const shipId = data().shipId;
       if (scoreSaved) {
         els.saveMsg.textContent = "Essa run já foi salva.";
         return;
       }
       if (mode === "story") {
-        Save.pushBoard("story", { name, score, extra: `fase ${stageId}` });
+        Save.pushBoard("story", { name, score, extra: `fase ${stageId}`, shipId });
         if (typeof Cloud !== "undefined") Cloud.pushScore("story", { name, score, extra: `fase ${stageId}` });
       } else {
-        Save.pushBoard("survival", { name, score, extra: `onda ${wave}` });
+        Save.pushBoard("survival", { name, score, extra: `onda ${wave}`, shipId });
         if (typeof Cloud !== "undefined") Cloud.pushScore("survival", { name, score, extra: `onda ${wave}` });
       }
       scoreSaved = true;
@@ -1709,7 +1784,9 @@ const Game = (() => {
     els.btnPauseMenu = document.getElementById("btn-pause-menu");
     els.overText = document.getElementById("over-text");
     els.overName = document.getElementById("over-name");
+    els.overNameRow = document.getElementById("over-name-row");
     els.btnSaveScore = document.getElementById("btn-save-score");
+    els.rankNote = document.getElementById("rank-note");
     els.btnRetry = document.getElementById("btn-retry");
     els.btnOverMenu = document.getElementById("btn-over-menu");
     els.saveMsg = document.getElementById("save-msg");

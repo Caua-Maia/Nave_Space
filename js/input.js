@@ -95,12 +95,15 @@ const Input = (() => {
     const kLen = Math.hypot(moveX, moveY) || 1;
 
     const kbMove = { x: moveX / kLen, y: moveY / kLen, mag: Math.min(1, Math.hypot(moveX, moveY)) };
+    const desktop = typeof document !== "undefined" && document.body && document.body.dataset.platform === "desktop";
     const move =
       pad && pad.left.mag > 0.02
         ? { x: pad.left.x, y: pad.left.y, mag: pad.left.mag }
-        : touch && touch.left.mag > 0.02
-          ? { x: touch.left.x, y: touch.left.y, mag: touch.left.mag }
-          : kbMove;
+        : desktop && kbMove.mag > 0.02
+          ? kbMove
+          : touch && touch.mode && touch.left.mag > 0.02
+            ? { x: touch.left.x, y: touch.left.y, mag: touch.left.mag }
+            : kbMove;
 
     const kbShoot = mouse.down || keys.has("Space") || keys.has("KeyJ");
     const pausePressed = justPressed(
@@ -156,9 +159,11 @@ const Input = (() => {
     attach,
     snapshot,
     status() {
-      if (!padName && typeof TouchControls !== "undefined" && TouchControls.isTouchDevice()) {
+      const desktop = document.body && document.body.dataset.platform === "desktop";
+      if (!padName && !desktop && typeof TouchControls !== "undefined" && TouchControls.isTouchDevice()) {
         return "Controle: joysticks na tela";
       }
+      if (!padName && desktop) return "Controle: teclado + mouse (Esc pausa)";
       if (!padName) return "Controle: não detectado (WASD + mouse)";
       const short = padName.length > 42 ? padName.slice(0, 42) + "…" : padName;
       return `Controle: ${short}`;
