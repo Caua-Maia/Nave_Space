@@ -664,6 +664,14 @@ h1 {
   filter: brightness(1.08);
 }
 
+.link-room {
+  margin: 0 0 8px;
+  font-size: clamp(32px, 8vw, 52px);
+  letter-spacing: 0.28em;
+  color: var(--cyan);
+  font-weight: 800;
+}
+
 .hint {
   margin-top: 14px;
   font-size: clamp(14px, 2vw, 16px);

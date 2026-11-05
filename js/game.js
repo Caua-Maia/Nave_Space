@@ -33,6 +33,13 @@ const Game = (() => {
   let selectedShipId = "lanca";
   let pendingMode = "survival";
   let optionsFrom = "title";
+  let remote = null;
+  let remoteGoal = null;
+  let linkAcc = 0;
+  let linkLive = false;
+  let linkName = "Piloto";
+  let linkShip = "lanca";
+  let worldSeq = 1;
   const els = {};
 
   function data() {
@@ -289,6 +296,7 @@ const Game = (() => {
   }
 
   function saveRunSession() {
+    if (mode === "link") return false;
     if (state !== "play" && state !== "pause") return false;
     commitName(els.pilotName.value || data().name);
     Save.saveSession(buildSessionSnapshot());
@@ -328,9 +336,37 @@ const Game = (() => {
       : "<li>Nenhum registro ainda</li>";
   }
 
+  function linkHost() {
+    return mode === "link" && typeof Net !== "undefined" && Net.role() === "host";
+  }
+
+  function linkGuest() {
+    return mode === "link" && typeof Net !== "undefined" && Net.role() !== "host";
+  }
+
+  function likeSurvival() {
+    return mode === "survival" || linkHost();
+  }
+
+  function pilotTarget(ent) {
+    if (mode === "link" && remote) {
+      return dist2(ent, remote) < dist2(ent, player) ? remote : player;
+    }
+    return player;
+  }
+
+  function q3(n) {
+    return Math.round(Number(n) * 1000) / 1000;
+  }
+
+  function markId(ent) {
+    if (!ent.nid) ent.nid = worldSeq++;
+    return ent.nid;
+  }
+
   function caps() {
     const bossHere = bosses.length > 0;
-    if (mode === "survival") {
+    if (likeSurvival()) {
       const d = survivalDifficulty();
       return {
         rockMax: bossHere ? Math.max(4, d.rockMax - 3) : d.rockMax,
@@ -397,6 +433,7 @@ const Game = (() => {
     stageDone = false;
     surgeTimer = 14;
     diffTier = 1;
+    if (mode === "link" && !linkHost()) return;
     const n = mode === "story" ? 3 : 4;
     for (let i = 0; i < n; i++) {
       const p = spawnEdge(w, h, 80);
@@ -501,7 +538,16 @@ const Game = (() => {
     showView("title");
   }
 
+  function hangupLink() {
+    linkLive = false;
+    remote = null;
+    remoteGoal = null;
+    if (typeof Net !== "undefined" && Net.role()) Net.leave();
+    if (mode === "link") mode = "survival";
+  }
+
   function goMenu() {
+    hangupLink();
     state = "menu";
     els.hud.classList.add("hidden");
     refreshTitle();
@@ -509,6 +555,7 @@ const Game = (() => {
   }
 
   function gameOver() {
+    if (state === "dead") return;
     state = "dead";
     Save.clearSession();
     refreshTitle();
@@ -586,7 +633,7 @@ const Game = (() => {
   }
 
   function maybeSpawnSurvivalBoss() {
-    if (mode !== "survival") return;
+    if (!likeSurvival()) return;
     if (bosses.length) return;
     if (wave < 3) return;
     if (wave === lastBossWave) return;
@@ -625,20 +672,15 @@ const Game = (() => {
     spawnEnemy -= dt;
     spawnHeal -= dt;
     const { rockMax, enemyMax } = caps();
-    const surv = mode === "survival" ? survivalDifficulty() : null;
+    const surv = likeSurvival() ? survivalDifficulty() : null;
     const rockRate = surv ? surv.rockRate : Math.max(1.15, 2.4 - elapsed * 0.012);
     const enemyRate = surv ? surv.enemyRate : Math.max(2.1, 6.2 - elapsed * 0.018);
     if (spawnRock <= 0 && rocks.length < rockMax) {
       spawnRock = rockRate * (0.92 + Math.random() * 0.16);
       const p = spawnEdge(w, h);
-      const size =
-        mode === "survival" && wave > 8 && Math.random() < 0.35 + wave * 0.002
-          ? 3
-          : Math.random() < 0.45
-            ? 3
-            : Math.random() < 0.75
-              ? 2
-              : 1;
+      const bigRock =
+        (mode === "survival" || linkHost()) && wave > 8 && Math.random() < 0.35 + wave * 0.002;
+      const size = bigRock ? 3 : Math.random() < 0.45 ? 3 : Math.random() < 0.75 ? 2 : 1;
       const toward = Math.atan2(player.y - p.y, player.x - p.x) + rand(-0.55, 0.55);
       const spd = surv ? surv.rockSpeed * (0.9 + Math.random() * 0.25) : 36 + Math.min(wave, 12) * 5;
       rocks.push(new Asteroid(p.x, p.y, size, Math.cos(toward) * spd, Math.sin(toward) * spd));
@@ -650,7 +692,8 @@ const Game = (() => {
       const type = pickEnemyType(surv ? surv.scale : 1 + elapsed * 0.012);
       enemies.push(new Enemy(p.x, p.y, type, surv ? surv.scale : 1));
     }
-    if (spawnHeal <= 0 && player.hp < player.maxHp) {
+    const needy = player.hp < player.maxHp || (linkHost() && remote && remote.hp < remote.maxHp);
+    if (spawnHeal <= 0 && needy) {
       const healWait = surv ? surv.healInterval : player.hp < 40 ? 11 : 17;
       spawnHeal = healWait + rand(0, 4);
       if (wave < 25 || Math.random() < 0.65) {
@@ -659,7 +702,7 @@ const Game = (() => {
       }
     }
 
-    if (mode === "survival") {
+    if (likeSurvival()) {
       surgeTimer -= dt;
       if (surgeTimer <= 0) {
         surgeTimer = Math.max(8, 22 - wave * 0.08 - diffTier * 0.15) * (0.75 + Math.random() * 0.5);
@@ -667,11 +710,11 @@ const Game = (() => {
       }
     }
 
-    const waveLen = mode === "survival" ? Math.max(14, 22 - Math.floor(wave / 12)) : 22;
+    const waveLen = likeSurvival() ? Math.max(14, 22 - Math.floor(wave / 12)) : 22;
     const newWave = 1 + Math.floor(elapsed / waveLen);
     if (newWave !== wave) {
       wave = newWave;
-      if (mode === "survival") maybeSpawnSurvivalBoss();
+      if (likeSurvival()) maybeSpawnSurvivalBoss();
     }
 
     if (mode === "story") tickStory();
@@ -739,23 +782,371 @@ const Game = (() => {
       );
       if (player.shipId === "dardo") b.r = 2.2;
       if (player.shipId === "bastiao") b.r = 4.4;
+      if (mode === "link") b.owner = Net.role() === "host" ? 0 : 1;
       bullets.push(b);
     }
     AudioFx.shoot();
+    return {
+      t: "shot",
+      x: w ? player.x / w : 0.5,
+      y: h ? player.y / h : 0.5,
+      aim: player.aim,
+      n,
+      spread,
+      speed: player.bulletSpeed,
+      shipId: player.shipId,
+    };
+  }
+
+  function spawnRemoteShot(msg) {
+    if (!remote || !w || !h) return;
+    const spec = shipById(msg.shipId || remote.shipId);
+    const x = Number(msg.x) * w;
+    const y = Number(msg.y) * h;
+    const aim = Number(msg.aim) || 0;
+    const n = Math.max(1, Math.min(5, msg.n | 0));
+    const spread = Number(msg.spread) || 0;
+    const speed = Number(msg.speed) || spec.bulletSpeed;
+    for (let i = 0; i < n; i++) {
+      const a = aim + (n === 1 ? 0 : (i - (n - 1) / 2) * spread);
+      const b = new Bullet(x + Math.cos(a) * 18, y + Math.sin(a) * 18, a, speed, true, spec.color);
+      b.owner = 1;
+      if (spec.id === "dardo") b.r = 2.2;
+      if (spec.id === "bastiao") b.r = 4.4;
+      bullets.push(b);
+    }
+  }
+
+  function easeRemote(dt) {
+    if (!remote || !remoteGoal) return;
+    const k = Math.min(1, dt * 14);
+    let dx = remoteGoal.x - remote.x;
+    let dy = remoteGoal.y - remote.y;
+    if (dx > w * 0.5) dx -= w;
+    if (dx < -w * 0.5) dx += w;
+    if (dy > h * 0.5) dy -= h;
+    if (dy < -h * 0.5) dy += h;
+    remote.x += dx * k;
+    remote.y += dy * k;
+    wrap(remote, w, h, remote.r);
+    let da = remoteGoal.aim - remote.aim;
+    while (da > Math.PI) da -= Math.PI * 2;
+    while (da < -Math.PI) da += Math.PI * 2;
+    remote.aim += da * k;
+  }
+
+  function packWorld() {
+    const take = (list, max) => (list.length > max ? list.slice(0, max) : list);
+    return {
+      t: "world",
+      wave,
+      score,
+      elapsed: q3(elapsed),
+      tier: diffTier,
+      ghp: remote ? Math.ceil(remote.hp) : 0,
+      rapid: remote ? q3(remote.rapid) : 0,
+      shield: remote ? q3(remote.shield) : 0,
+      multi: remote ? q3(remote.multi) : 0,
+      rocks: take(rocks, 24).map((r) => [markId(r), q3(r.x / w), q3(r.y / h), r.size, q3(r.rot), r.hp]),
+      enemies: take(enemies, 18).map((e) => [
+        markId(e),
+        q3(e.x / w),
+        q3(e.y / h),
+        e.type,
+        q3(e.scale),
+        q3(e.angle),
+        e.hp,
+        q3(e.r),
+      ]),
+      bosses: bosses.slice(0, 2).map((b) => [
+        markId(b),
+        q3(b.x / w),
+        q3(b.y / h),
+        b.kind,
+        q3(b.angle),
+        b.hp,
+        b.maxHp,
+        q3(b.t),
+      ]),
+      bullets: take(
+        bullets.filter((b) => !b.ghost),
+        64
+      ).map((b) => [
+        q3(b.x / w),
+        q3(b.y / h),
+        q3(b.vx / w),
+        q3(b.vy / h),
+        b.fromPlayer ? 1 : 0,
+        b.owner === 1 ? 1 : 0,
+        q3(b.r),
+        b.color,
+        q3(b.life),
+      ]),
+      powers: take(powers, 6).map((p) => [q3(p.x / w), q3(p.y / h), p.type, q3(p.life)]),
+    };
+  }
+
+  function pullPos(ent, x, y) {
+    ent.tx = x * w;
+    ent.ty = y * h;
+  }
+
+  function easeList(list, dt) {
+    const k = Math.min(1, dt * 12);
+    list.forEach((ent) => {
+      if (ent.tx == null) return;
+      let dx = ent.tx - ent.x;
+      let dy = ent.ty - ent.y;
+      if (dx > w * 0.5) dx -= w;
+      if (dx < -w * 0.5) dx += w;
+      if (dy > h * 0.5) dy -= h;
+      if (dy < -h * 0.5) dy += h;
+      ent.x += dx * k;
+      ent.y += dy * k;
+    });
+  }
+
+  function syncKind(list, rows, make, patch) {
+    const keep = new Set();
+    rows.forEach((row) => {
+      const id = row[0];
+      keep.add(id);
+      let ent = list.find((item) => item.nid === id);
+      if (!ent) {
+        ent = make(row);
+        ent.nid = id;
+        list.push(ent);
+      }
+      patch(ent, row);
+    });
+    for (let i = list.length - 1; i >= 0; i--) {
+      if (!keep.has(list[i].nid)) list.splice(i, 1);
+    }
+  }
+
+  function applyWorld(msg) {
+    if (!linkGuest() || !w || !h) return;
+    score = msg.score || 0;
+    wave = msg.wave || wave;
+    elapsed = Number(msg.elapsed) || elapsed;
+    diffTier = msg.tier || diffTier;
+    if (typeof msg.ghp === "number" && player) {
+      if (msg.ghp < player.hp) {
+        AudioFx.hit();
+        shake = 8;
+        rumble(100, 0.4);
+      }
+      player.hp = msg.ghp;
+      player.rapid = Number(msg.rapid) || 0;
+      player.shield = Number(msg.shield) || 0;
+      player.multi = Number(msg.multi) || 0;
+    }
+    syncKind(
+      rocks,
+      msg.rocks || [],
+      (row) => new Asteroid(row[1] * w, row[2] * h, row[3]),
+      (ent, row) => {
+        pullPos(ent, row[1], row[2]);
+        ent.size = row[3];
+        ent.r = ent.size === 3 ? 42 : ent.size === 2 ? 26 : 14;
+        ent.rot = row[4];
+        ent.hp = row[5];
+      }
+    );
+    syncKind(
+      enemies,
+      msg.enemies || [],
+      (row) => new Enemy(row[1] * w, row[2] * h, row[3], row[4]),
+      (ent, row) => {
+        pullPos(ent, row[1], row[2]);
+        ent.type = row[3];
+        ent.scale = row[4];
+        ent.angle = row[5];
+        ent.hp = row[6];
+        ent.r = row[7];
+        ent.color = enemyTierColor(ent.scale);
+      }
+    );
+    syncKind(
+      bosses,
+      msg.bosses || [],
+      (row) => new Boss(row[1] * w, row[2] * h, row[3]),
+      (ent, row) => {
+        pullPos(ent, row[1], row[2]);
+        ent.kind = row[3];
+        ent.angle = row[4];
+        ent.hp = row[5];
+        ent.maxHp = row[6];
+        ent.t = row[7];
+      }
+    );
+    const mine = bullets.filter((b) => b.owner === 1);
+    bullets = (msg.bullets || [])
+      .filter((row) => row[5] !== 1)
+      .map((row) => {
+        const angle = Math.atan2(row[3] * h, row[2] * w);
+        const speed = Math.hypot(row[2] * w, row[3] * h);
+        const b = new Bullet(row[0] * w, row[1] * h, angle, speed || 1, row[4] === 1, row[7], 16);
+        b.vx = row[2] * w;
+        b.vy = row[3] * h;
+        b.r = row[6];
+        b.life = row[8];
+        b.owner = 0;
+        return b;
+      })
+      .concat(mine);
+    powers = (msg.powers || []).map((row) => {
+      const p = new PowerUp(row[0] * w, row[1] * h, row[2]);
+      p.life = row[3];
+      pullPos(p, row[0], row[1]);
+      return p;
+    });
+  }
+
+  function rememberPilot() {
+    linkName = commitName(els.pilotName.value) || "Piloto";
+    linkShip = data().shipId || selectedShipId || "lanca";
+  }
+
+  function pilotHello() {
+    Net.send({
+      t: "hello",
+      name: linkName,
+      shipId: linkShip,
+    });
+  }
+
+  function beginLinkMatch() {
+    if (linkLive) return;
+    const mate = Net.mate();
+    if (!mate) return;
+    linkLive = true;
+    selectedShipId = linkShip;
+    mode = "link";
+    score = 0;
+    stageStartScore = 0;
+    resetArena();
+    const side = Net.role() === "host" ? 0.38 : 0.62;
+    player.x = w * side;
+    player.y = h * 0.5;
+    remote = new Player(w * (1 - side), h * 0.5, mate.shipId);
+    remote.pilotName = mate.name;
+    remoteGoal = null;
+    linkAcc = 0;
+    state = "play";
+    hideOverlay();
+    els.hud.classList.remove("hidden");
+    pilotHello();
+  }
+
+  function openLink() {
+    AudioFx.resume();
+    commitName(els.pilotName.value);
+    hangupLink();
+    state = "link";
+    els.linkCode.value = "";
+    els.linkRoom.textContent = "----";
+    els.linkStatus.textContent = "Crie uma sala ou entre com o código de quem já está esperando.";
+    showView("link");
+  }
+
+  function createRoom() {
+    rememberPilot();
+    const room = Net.makeCode();
+    els.linkRoom.textContent = room;
+    els.linkStatus.textContent = "Abrindo sala " + room + "…";
+    Net.host(room);
+  }
+
+  function enterRoom() {
+    rememberPilot();
+    const room = els.linkCode.value.trim().toUpperCase();
+    if (room.length < 4) {
+      els.linkStatus.textContent = "O código tem 4 caracteres.";
+      return;
+    }
+    els.linkRoom.textContent = room;
+    els.linkStatus.textContent = "Entrando na sala " + room + "…";
+    Net.join(room);
+  }
+
+  function onNet(type, msg) {
+    if (type === "ready") {
+      els.linkRoom.textContent = msg.code || Net.code();
+      if (Net.role() === "host") {
+        els.linkStatus.textContent = "Sala " + Net.code() + ". Passe esse código para o outro piloto.";
+      }
+    }
+    if (type === "joined") {
+      els.linkStatus.textContent = "Conectado. Esperando o nome do outro piloto.";
+      pilotHello();
+    }
+    if (type === "peer") {
+      els.linkStatus.textContent = (msg.name || "Piloto") + " entrou.";
+      beginLinkMatch();
+    }
+    if (type === "ship" && remote) {
+      remoteGoal = {
+        x: Number(msg.x) * w,
+        y: Number(msg.y) * h,
+        aim: Number(msg.aim) || 0,
+      };
+      if (msg.shipId && msg.shipId !== remote.shipId) {
+        const spec = shipById(msg.shipId);
+        remote.shipId = spec.id;
+        remote.color = spec.color;
+        remote.r = spec.r;
+      }
+    }
+    if (type === "shot" && linkHost()) spawnRemoteShot(msg);
+    if (type === "world") applyWorld(msg);
+    if (type === "down" && (state === "play" || state === "pause")) gameOver();
+    if (type === "fail" && state === "link") {
+      els.linkStatus.textContent = msg.message || "Falha na sala.";
+    }
+    if (type === "gone" && (state === "play" || state === "pause") && mode === "link") {
+      linkLive = false;
+      remote = null;
+      remoteGoal = null;
+      state = "link";
+      els.hud.classList.add("hidden");
+      els.linkStatus.textContent = "O outro piloto saiu da sala.";
+      showView("link");
+    }
+  }
+
+  function strike(ship, dmg) {
+    if (!ship || ship.hp <= 0) return;
+    const local = ship === player;
+    if (!ship.hurt(dmg)) return;
+    burst(ship.x, ship.y, local ? "#4de8ff" : "#ff4d9a", 12, 220);
+    if (local) {
+      AudioFx.hit();
+      shake = 10;
+      rumble(120, 0.55);
+    }
+  }
+
+  function grantPower(ship, power) {
+    if (power.type === "rapid") ship.rapid = 6;
+    if (power.type === "shield") ship.shield = 8;
+    if (power.type === "multi") ship.multi = 7;
+    if (power.type === "heal") ship.heal(36);
   }
 
   function collide() {
     const { rockMax } = caps();
     for (let i = bullets.length - 1; i >= 0; i--) {
       const b = bullets[i];
+      if (b.ghost) continue;
       if (!b.fromPlayer) {
-        if (dist2(b, player) < (b.r + player.r) * (b.r + player.r)) {
-          bullets.splice(i, 1);
-          if (player.hurt(b.dmg || 16)) {
-            AudioFx.hit();
-            shake = 10;
-            rumble(120, 0.55);
-            burst(player.x, player.y, "#4de8ff", 12, 220);
+        const ships = linkHost() && remote ? [player, remote] : [player];
+        for (let s = 0; s < ships.length; s++) {
+          const ship = ships[s];
+          if (dist2(b, ship) < (b.r + ship.r) * (b.r + ship.r)) {
+            bullets.splice(i, 1);
+            strike(ship, b.dmg || 16);
+            break;
           }
         }
         continue;
@@ -818,45 +1209,36 @@ const Game = (() => {
       }
     }
 
+    const bodyShips = linkHost() && remote ? [player, remote] : [player];
     for (const rock of rocks) {
-      if (dist2(rock, player) < (rock.r * 0.85 + player.r) * (rock.r * 0.85 + player.r)) {
-        if (player.hurt(16)) {
-          AudioFx.hit();
-          shake = 12;
-          rumble(140, 0.55);
-        }
-      }
+      bodyShips.forEach((ship) => {
+        if (dist2(rock, ship) < (rock.r * 0.85 + ship.r) * (rock.r * 0.85 + ship.r)) strike(ship, 16);
+      });
     }
     for (const en of enemies) {
-      if (dist2(en, player) < (en.r + player.r) * (en.r + player.r)) {
-        if (player.hurt(14)) {
-          AudioFx.hit();
-          shake = 10;
-          rumble(120, 0.5);
-        }
-      }
+      bodyShips.forEach((ship) => {
+        if (dist2(en, ship) < (en.r + ship.r) * (en.r + ship.r)) strike(ship, 14);
+      });
     }
     for (const boss of bosses) {
-      if (dist2(boss, player) < (boss.r * 0.8 + player.r) * (boss.r * 0.8 + player.r)) {
-        if (player.hurt(20)) {
-          AudioFx.hit();
-          shake = 16;
-          rumble(180, 0.7);
-        }
-      }
+      bodyShips.forEach((ship) => {
+        if (dist2(boss, ship) < (boss.r * 0.8 + ship.r) * (boss.r * 0.8 + ship.r)) strike(ship, 20);
+      });
     }
     for (let i = powers.length - 1; i >= 0; i--) {
       const p = powers[i];
+      let took = false;
       if (dist2(p, player) < (p.r + player.r) * (p.r + player.r)) {
-        if (p.type === "rapid") player.rapid = 6;
-        if (p.type === "shield") player.shield = 8;
-        if (p.type === "multi") player.multi = 7;
-        if (p.type === "heal") {
-          player.heal(36);
-          AudioFx.heal();
-        } else AudioFx.power();
-        powers.splice(i, 1);
+        grantPower(player, p);
+        took = true;
+        if (p.type === "heal") AudioFx.heal();
+        else AudioFx.power();
       }
+      if (linkHost() && remote && dist2(p, remote) < (p.r + remote.r) * (p.r + remote.r)) {
+        grantPower(remote, p);
+        took = true;
+      }
+      if (took) powers.splice(i, 1);
     }
   }
 
@@ -867,7 +1249,7 @@ const Game = (() => {
   }
 
   function update(dt, input) {
-    if (state === "menu" || state === "brief" || state === "ranks" || state === "ships") return;
+    if (state === "menu" || state === "brief" || state === "ranks" || state === "ships" || state === "link") return;
     if ((state === "dead" || state === "clear" || state === "win") && input.confirmPressed && !typing()) {
       if (state === "dead") document.getElementById("btn-retry").click();
       else if (state === "clear") document.getElementById("btn-next").click();
@@ -883,12 +1265,44 @@ const Game = (() => {
     if (comboTime <= 0) combo = 0;
 
     player.update(dt, input, w, h);
-    tryShoot(input);
-    spawnWaveStuff(dt);
+    const shot = tryShoot(input);
+    if (mode === "link") {
+      easeRemote(dt);
+      linkAcc += dt;
+      if (linkAcc >= 0.05) {
+        linkAcc = 0;
+        Net.send({
+          t: "ship",
+          x: player.x / w,
+          y: player.y / h,
+          aim: player.aim,
+          shipId: player.shipId,
+        });
+        if (linkHost()) Net.send(packWorld());
+      }
+      if (shot) Net.send(shot);
+      if (linkGuest()) {
+        easeList(rocks, dt);
+        easeList(enemies, dt);
+        easeList(bosses, dt);
+        easeList(powers, dt);
+        bullets.forEach((b) => b.update(dt, w, h));
+        bullets = bullets.filter((b) => b.life > 0 && b.x > -40 && b.x < w + 40 && b.y > -40 && b.y < h + 40);
+        powers = powers.filter((p) => p.life > 0);
+        shake *= 0.88;
+        if (player.hp <= 0) {
+          Net.send({ t: "down" });
+          gameOver();
+        }
+        hud();
+        return;
+      }
+    }
+    if (mode !== "link" || linkHost()) spawnWaveStuff(dt);
 
     rocks.forEach((r) => r.update(dt, w, h));
-    enemies.forEach((e) => e.update(dt, w, h, player, bullets));
-    bosses.forEach((b) => b.update(dt, w, h, player, bullets));
+    enemies.forEach((e) => e.update(dt, w, h, pilotTarget(e), bullets));
+    bosses.forEach((b) => b.update(dt, w, h, pilotTarget(b), bullets));
     bullets.forEach((b) => b.update(dt, w, h));
     particles.forEach((p) => p.update(dt));
     powers.forEach((p) => p.update(dt));
@@ -899,7 +1313,10 @@ const Game = (() => {
 
     collide();
     shake *= 0.88;
-    if (player.hp <= 0) gameOver();
+    if (player.hp <= 0 || (linkHost() && remote && remote.hp <= 0)) {
+      if (mode === "link") Net.send({ t: "down" });
+      gameOver();
+    }
     hud();
   }
 
@@ -920,6 +1337,10 @@ const Game = (() => {
         bossAlive: bosses.length > 0,
         bossName: bosses[0] && bosses[0].name,
       });
+    } else if (mode === "link") {
+      els.wave.textContent = `ONDA ${wave} · T${diffTier}`;
+      const mate = remote && remote.pilotName ? remote.pilotName : "PARCEIRO";
+      els.objective.textContent = bosses.length ? `${mate} · BOSS: ${bosses[0].name}` : `${mate} · SOBREVIVÊNCIA`;
     } else {
       els.wave.textContent = `ONDA ${wave} · T${diffTier}`;
       els.objective.textContent = bosses.length
@@ -957,6 +1378,15 @@ const Game = (() => {
     powers.forEach((p) => p.draw(ctx));
     bullets.forEach((b) => b.draw(ctx));
     particles.forEach((p) => p.draw(ctx));
+    if (remote && mode === "link" && (state === "play" || state === "pause")) {
+      remote.draw(ctx);
+      ctx.save();
+      ctx.fillStyle = "#d7f6ff";
+      ctx.font = "13px Segoe UI, sans-serif";
+      ctx.textAlign = "center";
+      ctx.fillText(remote.pilotName || "Piloto", remote.x, remote.y - remote.r - 16);
+      ctx.restore();
+    }
     if (player && state !== "menu") {
       player.draw(ctx);
       ctx.save();
@@ -1054,6 +1484,13 @@ const Game = (() => {
   }
 
   function bind() {
+    els.btnLink.addEventListener("click", openLink);
+    els.btnLinkHost.addEventListener("click", createRoom);
+    els.btnLinkJoin.addEventListener("click", enterRoom);
+    els.btnLinkBack.addEventListener("click", goMenu);
+    els.linkCode.addEventListener("input", () => {
+      els.linkCode.value = els.linkCode.value.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 4);
+    });
     els.btnStory.addEventListener("click", () => openHangar("story"));
     els.btnSurvival.addEventListener("click", () => openHangar("survival"));
     els.btnShipGo.addEventListener("click", confirmShip);
@@ -1157,6 +1594,13 @@ const Game = (() => {
     els.storySave = document.getElementById("story-save");
     els.btnStory = document.getElementById("btn-story");
     els.btnSurvival = document.getElementById("btn-survival");
+    els.btnLink = document.getElementById("btn-link");
+    els.btnLinkHost = document.getElementById("btn-link-host");
+    els.btnLinkJoin = document.getElementById("btn-link-join");
+    els.btnLinkBack = document.getElementById("btn-link-back");
+    els.linkCode = document.getElementById("link-code");
+    els.linkRoom = document.getElementById("link-room");
+    els.linkStatus = document.getElementById("link-status");
     els.btnContinue = document.getElementById("btn-continue");
     els.btnRanks = document.getElementById("btn-ranks");
     els.btnEnter = document.getElementById("btn-enter");
@@ -1209,6 +1653,7 @@ const Game = (() => {
       window.visualViewport.addEventListener("scroll", resize);
     }
     bind();
+    Net.on(onNet);
     refreshTitle();
     if (data().options.introSeen) {
       state = "menu";
