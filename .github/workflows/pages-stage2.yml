@@ -12,11 +12,12 @@ permissions:
 
 concurrency:
   group: pages
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    timeout-minutes: 25
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
@@ -33,3 +34,5 @@ jobs:
           path: _site
       - id: deployment
         uses: actions/deploy-pages@v4
+        with:
+          timeout: 1200000
