@@ -1,4 +1,4 @@
-const CACHE = "space-survivor-v18";
+const CACHE = "space-survivor-v19";
 const BASE = new URL("./", self.location);
 const FILES = [
   "",
@@ -9,9 +9,9 @@ const FILES = [
   "js/touch.js",
   "js/entities.js",
   "js/save.js",
+  "js/cloud.js",
   "js/settings.js",
   "js/story.js",
-  "js/vendor/peerjs.min.js",
   "js/net.js",
   "js/game.js",
   "js/main.js",

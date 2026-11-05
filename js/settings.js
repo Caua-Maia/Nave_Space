@@ -70,6 +70,7 @@ const Settings = (() => {
     document.getElementById("opt-volume-num").textContent = String(opt.volume);
     apply(opt);
     if (opt.music) AudioFx.resume();
+    if (typeof Cloud !== "undefined") Cloud.sync();
   }
 
   function bindDrag(el) {
@@ -105,6 +106,7 @@ const Settings = (() => {
       if (!editing || !draft) return;
       if (el.hasPointerCapture(event.pointerId)) el.releasePointerCapture(event.pointerId);
       Save.setOptions(draft);
+      if (typeof Cloud !== "undefined") Cloud.sync();
     });
     el.addEventListener("pointercancel", (event) => {
       if (el.hasPointerCapture(event.pointerId)) el.releasePointerCapture(event.pointerId);
@@ -157,6 +159,7 @@ const Settings = (() => {
     opt.layoutCustom = false;
     if (editing) draft = opt;
     Save.setOptions(opt);
+    if (typeof Cloud !== "undefined") Cloud.sync();
     apply(opt);
   }
 
@@ -165,6 +168,7 @@ const Settings = (() => {
     if (editing) draft = JSON.parse(JSON.stringify(opt));
     fillForm();
     apply(opt);
+    if (typeof Cloud !== "undefined") Cloud.sync();
   }
 
   function bind() {

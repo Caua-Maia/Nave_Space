@@ -326,14 +326,23 @@ const Game = (() => {
   }
 
   function fillRanks() {
+    const line = (e) =>
+      `${e.name} — ${e.score.toLocaleString("pt-BR")}${e.extra ? " · " + e.extra : ""}${e.shipId ? " · " + e.shipId : ""}`;
+    const paint = (survival, story) => {
+      els.rankSurvival.innerHTML = survival.length
+        ? survival.map((e) => `<li>${line(e)}</li>`).join("")
+        : "<li>Nenhum registro ainda</li>";
+      els.rankStory.innerHTML = story.length
+        ? story.map((e) => `<li>${line(e)}</li>`).join("")
+        : "<li>Nenhum registro ainda</li>";
+    };
     const s = data();
-    const line = (e) => `${e.name} — ${e.score.toLocaleString("pt-BR")}${e.extra ? " · " + e.extra : ""}`;
-    els.rankSurvival.innerHTML = s.survivalBoard.length
-      ? s.survivalBoard.map((e) => `<li>${line(e)}</li>`).join("")
-      : "<li>Nenhum registro ainda</li>";
-    els.rankStory.innerHTML = s.storyBoard.length
-      ? s.storyBoard.map((e) => `<li>${line(e)}</li>`).join("")
-      : "<li>Nenhum registro ainda</li>";
+    paint(s.survivalBoard, s.storyBoard);
+    if (typeof Cloud === "undefined") return;
+    Cloud.boards().then((boards) => {
+      if (!boards || state !== "ranks") return;
+      paint(boards.survival, boards.story);
+    });
   }
 
   function linkHost() {
@@ -498,11 +507,13 @@ const Game = (() => {
   function persistStory(partial) {
     const s = data();
     Save.saveStory({ ...s.story, ...partial });
+    if (typeof Cloud !== "undefined") Cloud.sync();
     refreshTitle();
   }
 
   function commitName(value) {
     const name = Save.setName(value);
+    if (typeof Cloud !== "undefined") Cloud.sync();
     if (els.pilotName) els.pilotName.value = name;
     if (els.overName && !els.overName.value) els.overName.value = name;
     if (els.winName && !els.winName.value) els.winName.value = name;
@@ -1477,6 +1488,7 @@ const Game = (() => {
 
   function confirmShip() {
     selectedShipId = Save.setShip(selectedShipId);
+    if (typeof Cloud !== "undefined") Cloud.sync();
     if (pendingMode === "story") {
       state = "brief";
       openStoryBrief();
@@ -1544,8 +1556,10 @@ const Game = (() => {
       }
       if (mode === "story") {
         Save.pushBoard("story", { name, score, extra: `fase ${stageId}` });
+        if (typeof Cloud !== "undefined") Cloud.pushScore("story", { name, score, extra: `fase ${stageId}` });
       } else {
         Save.pushBoard("survival", { name, score, extra: `onda ${wave}` });
+        if (typeof Cloud !== "undefined") Cloud.pushScore("survival", { name, score, extra: `onda ${wave}` });
       }
       scoreSaved = true;
       els.saveMsg.textContent = `Registro de ${name || "ANÔNIMO"} salvo.`;
@@ -1564,6 +1578,7 @@ const Game = (() => {
         return;
       }
       Save.pushBoard("story", { name, score, extra: "campanha" });
+      if (typeof Cloud !== "undefined") Cloud.pushScore("story", { name, score, extra: "campanha" });
       scoreSaved = true;
       els.winMsg.textContent = `Vitória de ${name || "ANÔNIMO"} no ranking.`;
     });
@@ -1655,6 +1670,9 @@ const Game = (() => {
     bind();
     Net.on(onNet);
     refreshTitle();
+    if (typeof Cloud !== "undefined") {
+      Cloud.pull().then(() => refreshTitle());
+    }
     if (data().options.introSeen) {
       state = "menu";
       showView("title");
