@@ -40,6 +40,7 @@ const Game = (() => {
   let linkName = "Piloto";
   let linkShip = "lanca";
   let linkHello = 0;
+  let linkPendingCode = "";
   let worldSeq = 1;
   const els = {};
 
@@ -594,8 +595,10 @@ const Game = (() => {
     linkLive = false;
     remote = null;
     remoteGoal = null;
+    linkPendingCode = "";
     clearInterval(linkHello);
     linkHello = 0;
+    document.body.classList.remove("link-role-host", "link-role-guest");
     if (els.viewLink) els.viewLink.classList.remove("hosting");
     if (typeof Net !== "undefined" && Net.role()) Net.leave();
     if (mode === "link") mode = "survival";
@@ -1118,11 +1121,16 @@ const Game = (() => {
     setPilotSlot(remote, Net.role() === "host" ? "guest" : "host");
   }
 
-  function startHelloPulse() {
+  function startHelloPulse(inLobby) {
     clearInterval(linkHello);
     pilotHello();
     linkHello = setInterval(() => {
-      if (!linkLive) {
+      if (inLobby && state !== "link-lobby") {
+        clearInterval(linkHello);
+        linkHello = 0;
+        return;
+      }
+      if (!inLobby && !linkLive) {
         clearInterval(linkHello);
         linkHello = 0;
         return;
@@ -1131,10 +1139,79 @@ const Game = (() => {
         pilotHello();
         return;
       }
+      if (inLobby) {
+        refreshLinkLobby();
+        return;
+      }
       attachMate();
       clearInterval(linkHello);
       linkHello = 0;
     }, 700);
+  }
+
+  function syncShipSubtitle() {
+    if (!els.shipSubtitle) return;
+    if (pendingMode === "link-host") {
+      els.shipSubtitle.textContent = "Escolha a nave. Depois você abre a sala e decide quando iniciar.";
+    } else if (pendingMode === "link-guest") {
+      els.shipSubtitle.textContent = "Escolha a nave antes de entrar na sala de espera.";
+    } else {
+      els.shipSubtitle.textContent =
+        "Três formas, três jeitos de jogar. A Lança é a clássica. Dardo e Bastião são as novas.";
+    }
+  }
+
+  function refreshLinkLobby() {
+    if (!els.linkLobbyCode) return;
+    const code = Net.code() || "----";
+    els.linkLobbyCode.textContent = code;
+    const mate = Net.mate();
+    const spec = mate && mate.shipId ? shipById(mate.shipId) : null;
+    if (Net.role() === "host") {
+      els.linkLobbyStatus.textContent = mate
+        ? `${mate.name} entrou · nave ${spec ? spec.name : ""}`
+        : `Sala ${code} aberta. Passe o código para o outro piloto.`;
+      if (els.linkLobbyMate) {
+        els.linkLobbyMate.textContent = mate ? "Quando quiser, aperte INICIAR PARTIDA." : "Você pode iniciar sozinho ou esperar.";
+      }
+    } else {
+      els.linkLobbyStatus.textContent = mate
+        ? `Conectado com ${mate.name}`
+        : "Você entrou na sala.";
+      if (els.linkLobbyMate) {
+        els.linkLobbyMate.textContent = "Aguardando o dono da sala iniciar…";
+      }
+    }
+  }
+
+  function openLinkLobby() {
+    state = "link-lobby";
+    linkLive = false;
+    remote = null;
+    remoteGoal = null;
+    linkName = commitName(els.pilotName.value) || linkName || "Piloto";
+    player = new Player(w * 0.5, h * 0.5, linkShip);
+    setPilotSlot(player, Net.role() === "host" ? "host" : "guest");
+    document.body.classList.toggle("link-role-host", Net.role() === "host");
+    document.body.classList.toggle("link-role-guest", Net.role() === "guest");
+    els.hud.classList.add("hidden");
+    refreshLinkLobby();
+    showView("link-lobby");
+  }
+
+  function hostStartLink() {
+    if (Net.role() !== "host" || state !== "link-lobby") return;
+    Net.send({ t: "start" });
+    startLinkArena();
+  }
+
+  function leaveLinkLobby() {
+    hangupLink();
+    pendingMode = "survival";
+    state = "link";
+    showView("link");
+    els.btnLinkHost.disabled = false;
+    els.btnLinkJoin.disabled = false;
   }
 
   function startLinkArena() {
@@ -1158,7 +1235,7 @@ const Game = (() => {
     state = "play";
     hideOverlay();
     els.hud.classList.remove("hidden");
-    startHelloPulse();
+    startHelloPulse(false);
   }
 
   function openLink() {
@@ -1168,35 +1245,36 @@ const Game = (() => {
     state = "link";
     els.linkCode.value = "";
     els.linkRoom.textContent = "----";
-    els.linkStatus.textContent = "Crie a sala para jogar agora, ou entre com o código de quem já está no mapa.";
+    els.linkStatus.textContent = "Crie ou entre com o código. Você escolhe a nave na sequência.";
     els.btnLinkHost.disabled = false;
     els.btnLinkJoin.disabled = false;
     showView("link");
   }
 
   function createRoom() {
-    rememberPilot();
-    els.btnLinkHost.disabled = true;
-    els.btnLinkJoin.disabled = true;
-    if (els.viewLink) els.viewLink.classList.add("hosting");
-    const room = Net.makeCode();
-    els.linkRoom.textContent = room;
-    els.linkStatus.textContent = "Sala " + room + ". Entrando no mapa…";
-    Net.host(room);
+    commitName(els.pilotName.value);
+    pendingMode = "link-host";
+    selectedShipId = data().shipId || "lanca";
+    state = "ships";
+    syncShipSubtitle();
+    paintShips();
+    showView("ships");
   }
 
   function enterRoom() {
-    rememberPilot();
+    commitName(els.pilotName.value);
     const room = els.linkCode.value.trim().toUpperCase();
     if (room.length < 4) {
       els.linkStatus.textContent = "O código tem 4 caracteres.";
       return;
     }
-    els.btnLinkHost.disabled = true;
-    els.btnLinkJoin.disabled = true;
-    els.linkRoom.textContent = room;
-    els.linkStatus.textContent = "Entrando na sala " + room + "…";
-    Net.join(room);
+    linkPendingCode = room;
+    pendingMode = "link-guest";
+    selectedShipId = data().shipId || "lanca";
+    state = "ships";
+    syncShipSubtitle();
+    paintShips();
+    showView("ships");
   }
 
   function onNet(type, msg) {
@@ -1204,11 +1282,23 @@ const Game = (() => {
       els.linkRoom.textContent = msg.code || Net.code();
     }
     if (type === "joined") {
-      startLinkArena();
+      if (state === "link-lobby" || pendingMode === "link-host" || pendingMode === "link-guest") {
+        pendingMode = "survival";
+        openLinkLobby();
+        startHelloPulse(true);
+      }
     }
     if (type === "peer") {
+      if (state === "link-lobby") {
+        refreshLinkLobby();
+        pilotHello();
+        return;
+      }
       attachMate();
       pilotHello();
+    }
+    if (type === "start" && state === "link-lobby") {
+      startLinkArena();
     }
     if (type === "ship" && remote) {
       remoteGoal = {
@@ -1226,7 +1316,12 @@ const Game = (() => {
     if (type === "shot" && linkHost()) spawnRemoteShot(msg);
     if (type === "world") applyWorld(msg);
     if (type === "down" && (state === "play" || state === "pause")) gameOver();
-    if (type === "fail" && (state === "link" || (mode === "link" && !linkLive))) {
+    if (type === "fail" && (state === "link" || state === "link-lobby" || (mode === "link" && !linkLive))) {
+      if (state === "link-lobby") {
+        if (els.linkLobbyStatus) els.linkLobbyStatus.textContent = msg.message || "Falha na sala.";
+        leaveLinkLobby();
+        return;
+      }
       els.btnLinkHost.disabled = false;
       els.btnLinkJoin.disabled = false;
       if (els.viewLink) els.viewLink.classList.remove("hosting");
@@ -1384,7 +1479,7 @@ const Game = (() => {
   }
 
   function update(dt, input) {
-    if (state === "menu" || state === "brief" || state === "ranks" || state === "ships" || state === "link") return;
+    if (state === "menu" || state === "brief" || state === "ranks" || state === "ships" || state === "link" || state === "link-lobby") return;
     if ((state === "dead" || state === "clear" || state === "win") && input.confirmPressed && !typing()) {
       if (state === "dead") document.getElementById("btn-retry").click();
       else if (state === "clear") document.getElementById("btn-next").click();
@@ -1473,16 +1568,11 @@ const Game = (() => {
         bossName: bosses[0] && bosses[0].name,
       });
     } else if (mode === "link") {
-      const room = Net.code() || "----";
-      els.wave.textContent = remote
-        ? `ONDA ${wave} · T${diffTier}`
-        : `SALA ${room}`;
-      const mate = remote && remote.pilotName ? remote.pilotName : "ESPERANDO O OUTRO";
+      els.wave.textContent = `ONDA ${wave} · T${diffTier}`;
+      const mate = remote && remote.pilotName ? remote.pilotName : "PARCEIRO";
       els.objective.textContent = bosses.length
         ? `${mate} · BOSS: ${bosses[0].name}`
-        : remote
-          ? `${mate} · SOBREVIVÊNCIA`
-          : `Passe ${room} para o outro piloto`;
+        : `${mate} · SOBREVIVÊNCIA`;
     } else {
       els.wave.textContent = `ONDA ${wave} · T${diffTier}`;
       els.objective.textContent = bosses.length
@@ -1529,15 +1619,7 @@ const Game = (() => {
       ctx.fillText(remote.pilotName || "Piloto", remote.x, remote.y - remote.r - 16);
       ctx.restore();
     }
-    if (mode === "link" && (state === "play" || state === "pause") && Net.code()) {
-      ctx.save();
-      ctx.fillStyle = remote ? "rgba(215,246,255,0.55)" : "#4de8ff";
-      ctx.font = "bold 22px Segoe UI, sans-serif";
-      ctx.textAlign = "center";
-      ctx.fillText("SALA " + Net.code(), w * 0.5, 36);
-      ctx.restore();
-    }
-    if (player && state !== "menu") {
+    if (player && state !== "menu" && state !== "link-lobby") {
       player.draw(ctx);
       ctx.save();
       ctx.strokeStyle = "rgba(77,232,255,0.25)";
@@ -1621,6 +1703,7 @@ const Game = (() => {
     pendingMode = modeName;
     selectedShipId = data().shipId || "lanca";
     state = "ships";
+    syncShipSubtitle();
     paintShips();
     showView("ships");
   }
@@ -1631,7 +1714,29 @@ const Game = (() => {
     if (pendingMode === "story") {
       state = "brief";
       openStoryBrief();
-    } else startSurvival(true);
+      return;
+    }
+    if (pendingMode === "link-host") {
+      linkShip = selectedShipId;
+      linkName = commitName(els.pilotName.value) || "Piloto";
+      if (els.viewLink) els.viewLink.classList.add("hosting");
+      const room = Net.makeCode();
+      els.linkRoom.textContent = room;
+      Net.host(room);
+      els.linkStatus.textContent = "Abrindo sala…";
+      openLinkLobby();
+      return;
+    }
+    if (pendingMode === "link-guest") {
+      linkShip = selectedShipId;
+      linkName = commitName(els.pilotName.value) || "Piloto";
+      els.linkRoom.textContent = linkPendingCode;
+      Net.join(linkPendingCode);
+      els.linkStatus.textContent = "Entrando na sala…";
+      openLinkLobby();
+      return;
+    }
+    startSurvival(true);
   }
 
   function bind() {
@@ -1639,13 +1744,23 @@ const Game = (() => {
     els.btnLinkHost.addEventListener("click", createRoom);
     els.btnLinkJoin.addEventListener("click", enterRoom);
     els.btnLinkBack.addEventListener("click", goMenu);
+    els.btnLinkStart.addEventListener("click", hostStartLink);
+    els.btnLinkLobbyBack.addEventListener("click", leaveLinkLobby);
     els.linkCode.addEventListener("input", () => {
       els.linkCode.value = els.linkCode.value.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 4);
     });
     els.btnStory.addEventListener("click", () => openHangar("story"));
     els.btnSurvival.addEventListener("click", () => openHangar("survival"));
     els.btnShipGo.addEventListener("click", confirmShip);
-    els.btnShipBack.addEventListener("click", goMenu);
+    els.btnShipBack.addEventListener("click", () => {
+      if (pendingMode === "link-host" || pendingMode === "link-guest") {
+        pendingMode = "survival";
+        state = "link";
+        showView("link");
+        return;
+      }
+      goMenu();
+    });
     els.shipGrid.addEventListener("click", (ev) => {
       const card = ev.target.closest("[data-ship]");
       if (!card) return;
@@ -1760,6 +1875,12 @@ const Game = (() => {
     els.linkRoom = document.getElementById("link-room");
     els.linkStatus = document.getElementById("link-status");
     els.viewLink = document.getElementById("view-link");
+    els.linkLobbyCode = document.getElementById("link-lobby-code");
+    els.linkLobbyStatus = document.getElementById("link-lobby-status");
+    els.linkLobbyMate = document.getElementById("link-lobby-mate");
+    els.btnLinkStart = document.getElementById("btn-link-start");
+    els.btnLinkLobbyBack = document.getElementById("btn-link-lobby-back");
+    els.shipSubtitle = document.getElementById("ship-subtitle");
     els.btnContinue = document.getElementById("btn-continue");
     els.btnRanks = document.getElementById("btn-ranks");
     els.btnEnter = document.getElementById("btn-enter");

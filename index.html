@@ -29,7 +29,7 @@
     <link rel="manifest" href="manifest.json" />
     <link rel="icon" href="icons/icon-192.png" />
     <link rel="apple-touch-icon" href="icons/icon-192.png" />
-    <link rel="stylesheet" href="css/style.css?v=23" />
+    <link rel="stylesheet" href="css/style.css?v=24" />
   </head>
   <body>
     <div id="app">
@@ -116,7 +116,7 @@
         <div class="panel hidden" data-view="link" id="view-link">
           <p class="kicker">MESMO MAPA</p>
           <h1>DOIS PILOTOS</h1>
-          <p class="subtitle">Quem cria entra no mapa na hora. O código aparece na tela. O outro só coloca o código e entra.</p>
+          <p class="subtitle">Crie ou entre com o código. Depois escolha a nave e aguarde na sala.</p>
           <p id="link-room" class="link-room">----</p>
           <p id="link-status" class="hint">Crie a sala para jogar agora, ou entre com o código de quem já está no mapa.</p>
           <div class="btn-row">
@@ -173,10 +173,25 @@
           </div>
         </div>
 
+        <div class="panel hidden" data-view="link-lobby" id="view-link-lobby">
+          <p class="kicker">SALA DE ESPERA</p>
+          <h1 id="link-lobby-code" class="link-room">----</h1>
+          <p id="link-lobby-status" class="hint">Conectando…</p>
+          <p id="link-lobby-mate" class="menu-pad"></p>
+          <div class="btn-row link-host-only">
+            <button id="btn-link-start" type="button">INICIAR PARTIDA</button>
+          </div>
+          <p class="hint link-host-only">Pode iniciar sozinho ou esperar o segundo piloto entrar.</p>
+          <p class="hint link-guest-only">Aguardando o dono da sala apertar INICIAR PARTIDA.</p>
+          <div class="btn-row">
+            <button id="btn-link-lobby-back" type="button" class="ghost">SAIR DA SALA</button>
+          </div>
+        </div>
+
         <div class="panel hidden" data-view="ships" id="view-ships">
           <p class="kicker">HANGAR</p>
           <h1>ESCOLHA A NAVE</h1>
-          <p class="subtitle">Três formas, três jeitos de jogar. A Lança é a clássica. Dardo e Bastião são as novas.</p>
+          <p id="ship-subtitle" class="subtitle">Três formas, três jeitos de jogar. A Lança é a clássica. Dardo e Bastião são as novas.</p>
           <div class="ship-grid" id="ship-grid"></div>
           <div class="btn-row">
             <button id="btn-ship-go" type="button">CONFIRMAR</button>
@@ -308,18 +323,18 @@
       </div>
     </div>
 
-    <script src="js/audio.js?v=23"></script>
-    <script src="js/input.js?v=23"></script>
-    <script src="js/platform.js?v=23"></script>
-    <script src="js/touch.js?v=23"></script>
-    <script src="js/entities.js?v=23"></script>
-    <script src="js/save.js?v=23"></script>
-    <script src="js/cloud.js?v=23"></script>
-    <script src="js/settings.js?v=23"></script>
-    <script src="js/story.js?v=23"></script>
-    <script src="js/net.js?v=23"></script>
-    <script src="js/game.js?v=23"></script>
-    <script src="js/main.js?v=23"></script>
+    <script src="js/audio.js?v=24"></script>
+    <script src="js/input.js?v=24"></script>
+    <script src="js/platform.js?v=24"></script>
+    <script src="js/touch.js?v=24"></script>
+    <script src="js/entities.js?v=24"></script>
+    <script src="js/save.js?v=24"></script>
+    <script src="js/cloud.js?v=24"></script>
+    <script src="js/settings.js?v=24"></script>
+    <script src="js/story.js?v=24"></script>
+    <script src="js/net.js?v=24"></script>
+    <script src="js/game.js?v=24"></script>
+    <script src="js/main.js?v=24"></script>
     <script>
       if ("serviceWorker" in navigator) {
         navigator.serviceWorker.register("sw.js", { updateViaCache: "none" });

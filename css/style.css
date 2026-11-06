@@ -696,6 +696,23 @@ h1 {
   display: none;
 }
 
+body:not(.link-role-host) .link-host-only {
+  display: none !important;
+}
+
+body:not(.link-role-guest) .link-guest-only {
+  display: none !important;
+}
+
+#view-link-lobby .link-room {
+  margin-bottom: 12px;
+}
+
+#view-link-lobby #link-lobby-mate {
+  min-height: 24px;
+  color: var(--cyan);
+}
+
 body[data-platform="desktop"] .mobile-only,
 body[data-platform="desktop"] .opt-touch-only {
   display: none !important;
