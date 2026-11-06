@@ -30,6 +30,8 @@ const Game = (() => {
   let lastBossWave = 0;
   let surgeTimer = 14;
   let diffTier = 1;
+  let survJitter = 1;
+  let survJitterSec = -1;
   let selectedShipId = "lanca";
   let pendingMode = "survival";
   let optionsFrom = "title";
@@ -115,6 +117,7 @@ const Game = (() => {
     const s = data();
     els.pilotName.value = s.name;
     const sess = s.session;
+    if (els.btnLink) els.btnLink.classList.toggle("hidden", s.options.showCoop !== true);
     if (sess) {
       els.btnContinue.classList.remove("hidden");
       const extra =
@@ -351,18 +354,40 @@ const Game = (() => {
     return spec && spec.name ? spec.name : "";
   }
 
-  function fillRanks() {
-    const line = (e) => {
+  function escapeRankText(s) {
+    return String(s)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;");
+  }
+
+  function fillRankOl(ol, rows) {
+    if (!ol) return;
+    ol.textContent = "";
+    if (!rows.length) {
+      const li = document.createElement("li");
+      li.textContent = "Nenhum registro ainda";
+      ol.appendChild(li);
+      return;
+    }
+    rows.forEach((e) => {
+      const li = document.createElement("li");
       const ship = shipRankLabel(e.shipId);
-      return `${e.name} — ${e.score.toLocaleString("pt-BR")}${e.extra ? " · " + e.extra : ""}${ship ? " · " + ship : ""}`;
-    };
+      let t =
+        escapeRankText(e.name) +
+        " — " +
+        e.score.toLocaleString("pt-BR") +
+        (e.extra ? " · " + escapeRankText(e.extra) : "") +
+        (ship ? " · " + escapeRankText(ship) : "");
+      li.textContent = t;
+      ol.appendChild(li);
+    });
+  }
+
+  function fillRanks() {
     const paint = (survival, story) => {
-      els.rankSurvival.innerHTML = survival.length
-        ? survival.map((e) => `<li>${line(e)}</li>`).join("")
-        : "<li>Nenhum registro ainda</li>";
-      els.rankStory.innerHTML = story.length
-        ? story.map((e) => `<li>${line(e)}</li>`).join("")
-        : "<li>Nenhum registro ainda</li>";
+      fillRankOl(els.rankSurvival, survival);
+      fillRankOl(els.rankStory, story);
     };
     if (els.rankNote) els.rankNote.textContent = "Carregando ranking global…";
     const s = data();
@@ -425,7 +450,7 @@ const Game = (() => {
   }
 
   function survivalDifficulty() {
-    const jitter = 0.88 + Math.random() * 0.28;
+    const jitter = survJitter;
     const scale = 1 + wave * 0.045 + elapsed * 0.0055;
     diffTier = Math.floor(scale);
     return {
@@ -479,6 +504,8 @@ const Game = (() => {
     stageDone = false;
     surgeTimer = 14;
     diffTier = 1;
+    survJitter = 0.88 + Math.random() * 0.28;
+    survJitterSec = Math.floor(elapsed);
     if (mode === "link" && !linkHost()) return;
     const n = mode === "story" ? 3 : 4;
     for (let i = 0; i < n; i++) {
@@ -860,8 +887,9 @@ const Game = (() => {
     let aimX = 0;
     let aimY = 0;
     let want = false;
-    if (input.pad && (input.pad.right.mag > 0.18 || input.pad.r2 > 0.12)) {
-      if (input.pad.right.mag > 0.18) {
+    const aimDead = 0.215;
+    if (input.pad && (input.pad.right.mag > aimDead || input.pad.r2 > 0.12)) {
+      if (input.pad.right.mag > aimDead) {
         aimX = input.pad.right.x;
         aimY = input.pad.right.y;
       } else {
@@ -870,7 +898,7 @@ const Game = (() => {
       }
       want = input.pad.shoot;
     } else if (input.touch && input.touch.mode) {
-      if (input.touch.right.mag > 0.18) {
+      if (input.touch.right.mag > aimDead) {
         aimX = input.touch.right.x;
         aimY = input.touch.right.y;
       } else {
@@ -1348,7 +1376,17 @@ const Game = (() => {
   function strike(ship, dmg) {
     if (!ship || ship.hp <= 0) return;
     const local = ship === player;
-    if (!ship.hurt(dmg)) return;
+    const hit = ship.hurt(dmg);
+    if (hit.shield) {
+      burst(ship.x, ship.y, "#7cffb2", 8, 160);
+      if (local) {
+        AudioFx.shieldHit();
+        shake = Math.max(shake, 5);
+        rumble(55, 0.28);
+      }
+      return;
+    }
+    if (!hit.hull) return;
     burst(ship.x, ship.y, local ? "#4de8ff" : "#ff4d9a", 12, 220);
     if (local) {
       AudioFx.hit();
@@ -1386,7 +1424,8 @@ const Game = (() => {
         const rock = rocks[r];
         if (dist2(b, rock) < (b.r + rock.r) * (b.r + rock.r)) {
           bullets.splice(i, 1);
-          rock.hp -= 1;
+          const bd = b.dmg || 16;
+          rock.hp = Math.max(0, rock.hp - bd / 16);
           burst(b.x, b.y, "#ffb347", 6, 140);
           if (rock.hp <= 0) {
             AudioFx.explode(rock.size);
@@ -1405,7 +1444,8 @@ const Game = (() => {
         const en = enemies[e];
         if (dist2(b, en) < (b.r + en.r) * (b.r + en.r)) {
           bullets.splice(i, 1);
-          en.hp -= 1;
+          const bd = b.dmg || 16;
+          en.hp -= bd / 16;
           burst(b.x, b.y, "#ff4d9a", 5, 160);
           if (en.hp <= 0) {
             AudioFx.explode(2);
@@ -1423,7 +1463,8 @@ const Game = (() => {
         const boss = bosses[k];
         if (dist2(b, boss) < (b.r + boss.r) * (b.r + boss.r)) {
           bullets.splice(i, 1);
-          boss.hp -= 1;
+          const bd = b.dmg || 16;
+          boss.hp = Math.max(0, boss.hp - bd / 16);
           burst(b.x, b.y, boss.color, 8, 160);
           if (boss.hp <= 0) {
             AudioFx.explode(4);
@@ -1491,6 +1532,13 @@ const Game = (() => {
     if (state !== "play") return;
 
     elapsed += dt;
+    if (likeSurvival()) {
+      const sec = Math.floor(elapsed);
+      if (sec !== survJitterSec) {
+        survJitterSec = sec;
+        survJitter = 0.88 + Math.random() * 0.28;
+      }
+    }
     comboTime -= dt;
     if (comboTime <= 0) combo = 0;
 

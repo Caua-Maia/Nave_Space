@@ -6,7 +6,7 @@ const Input = (() => {
   let padMapping = "";
   const prevButtons = {};
 
-  const DEAD = 0.18;
+  const DEAD = 0.215;
 
   function stick(x, y) {
     const mag = Math.hypot(x, y);
@@ -108,7 +108,9 @@ const Input = (() => {
             ? { x: touch.left.x, y: touch.left.y, mag: touch.left.mag }
             : kbMove;
 
-    const kbShoot = mouse.down || keys.has("Space") || keys.has("KeyJ");
+    const touchAimFire =
+      !!(touch && touch.mode && touch.right && touch.right.mag > DEAD);
+    const kbShoot = touchAimFire || mouse.down || keys.has("Space") || keys.has("KeyJ");
     const pausePressed = justPressed(
       "pause",
       keys.has("Escape") || keys.has("KeyP") || !!(pad && pad.start) || !!(touch && touch.pausePressed)

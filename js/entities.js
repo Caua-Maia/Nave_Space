@@ -123,7 +123,7 @@ class Asteroid {
     ctx.save();
     ctx.translate(this.x, this.y);
     ctx.rotate(this.rot);
-    ctx.strokeStyle = "#ffb347";
+    ctx.strokeStyle = "#ff9a3c";
     ctx.lineWidth = 2;
     ctx.beginPath();
     this.verts.forEach((v, i) => {
@@ -275,11 +275,16 @@ class Boss {
         else ctx.lineTo(x, y);
       }
       ctx.closePath();
+    } else if (this.kind === "mini_hunter" || this.kind === "cruiser") {
+      const br = this.r * 0.82;
+      ctx.rect(-br * 0.55, -br * 0.48, br * 1.1, br * 0.96);
     } else {
-      ctx.moveTo(this.r, 0);
-      ctx.lineTo(-this.r * 0.7, this.r * 0.55);
-      ctx.lineTo(-this.r * 0.35, 0);
-      ctx.lineTo(-this.r * 0.7, -this.r * 0.55);
+      const d = this.r * 0.95;
+      ctx.moveTo(0, -d);
+      ctx.lineTo(d * 0.62, d * 0.2);
+      ctx.lineTo(d * 0.35, d * 0.88);
+      ctx.lineTo(-d * 0.35, d * 0.88);
+      ctx.lineTo(-d * 0.62, d * 0.2);
       ctx.closePath();
     }
     ctx.stroke();
@@ -287,7 +292,7 @@ class Boss {
   }
 }
 
-const ENEMY_TIER_COLORS = ["#9dffb8", "#b088ff", "#6688ff", "#ffcc44", "#ff8844", "#ff4466", "#ff2200"];
+const ENEMY_TIER_COLORS = ["#e8c938", "#d932c4", "#52d95c", "#f0c020", "#c018b0", "#38e078", "#ff6a00"];
 
 const PILOT_SLOT_COLORS = {
   host: "#5cffd1",
@@ -397,25 +402,36 @@ class Enemy {
     const r = this.r;
     ctx.beginPath();
     if (this.type === "shooter") {
-      ctx.moveTo(r, 0);
-      ctx.lineTo(-r * 0.65, r * 0.7);
-      ctx.lineTo(-r * 0.25, 0);
-      ctx.lineTo(-r * 0.65, -r * 0.7);
+      const w = r * 0.85;
+      const h = r * 0.95;
+      ctx.rect(-w * 0.5, -h * 0.5, w, h);
     } else if (this.type === "orbit") {
-      for (let i = 0; i < 6; i++) {
-        const a = (i / 6) * TAU - Math.PI / 2;
-        const x = Math.cos(a) * r;
-        const y = Math.sin(a) * r;
-        if (i === 0) ctx.moveTo(x, y);
-        else ctx.lineTo(x, y);
-      }
+      const spike = r * 1.05;
+      ctx.moveTo(0, -spike);
+      ctx.lineTo(r * 0.72, -r * 0.15);
+      ctx.lineTo(r * 0.95, r * 0.65);
+      ctx.lineTo(0, r * 0.42);
+      ctx.lineTo(-r * 0.95, r * 0.65);
+      ctx.lineTo(-r * 0.72, -r * 0.15);
     } else if (this.type === "sniper") {
-      ctx.moveTo(r, 0);
-      ctx.lineTo(0, r * 0.65);
-      ctx.lineTo(-r, 0);
-      ctx.lineTo(0, -r * 0.65);
+      const d = r * 0.92;
+      ctx.moveTo(0, -d);
+      ctx.lineTo(d * 0.55, 0);
+      ctx.lineTo(0, d);
+      ctx.lineTo(-d * 0.55, 0);
     } else if (this.type === "block") {
       ctx.rect(-r * 0.75, -r * 0.75, r * 1.5, r * 1.5);
+    } else if (this.type === "swarm") {
+      const u = r * 0.55;
+      const top = -r * 0.9;
+      ctx.moveTo(-u, top);
+      ctx.lineTo(u, top);
+      ctx.lineTo(r * 0.95, r * 0.75);
+      ctx.lineTo(0, r * 0.35);
+      ctx.lineTo(-r * 0.95, r * 0.75);
+    } else if (this.type === "chaser") {
+      const br = r * 0.88;
+      ctx.rect(-br * 0.55, -br * 0.45, br * 1.1, br * 0.9);
     } else {
       ctx.moveTo(r, 0);
       ctx.lineTo(-r * 0.75, r * 0.75);
@@ -464,7 +480,7 @@ const SHIP_ROSTER = [
     spread: 0,
     bulletSpeed: 940,
     bulletDmg: 19,
-    color: "#d4ff4d",
+    color: "#58d4ff",
   },
   {
     id: "bastiao",
@@ -478,8 +494,8 @@ const SHIP_ROSTER = [
     shots: 2,
     spread: 0.28,
     bulletSpeed: 520,
-    bulletDmg: 16,
-    color: "#ffb347",
+    bulletDmg: 22,
+    color: "#6ab4ff",
   },
 ];
 
@@ -582,15 +598,15 @@ class Player {
     this.hp = Math.min(this.maxHp, this.hp + n);
   }
   hurt(n) {
-    if (this.iframes > 0) return false;
+    if (this.iframes > 0) return { hull: false, shield: false };
     if (this.shield > 0) {
       this.shield = Math.max(0, this.shield - 1.2);
       this.iframes = 0.35;
-      return false;
+      return { hull: false, shield: true };
     }
     this.hp -= n;
     this.iframes = 1.05;
-    return true;
+    return { hull: true, shield: false };
   }
   draw(ctx) {
     ctx.save();
