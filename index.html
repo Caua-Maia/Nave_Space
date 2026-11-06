@@ -29,7 +29,7 @@
     <link rel="manifest" href="manifest.json" />
     <link rel="icon" href="icons/icon-192.png" />
     <link rel="apple-touch-icon" href="icons/icon-192.png" />
-    <link rel="stylesheet" href="css/style.css?v=24" />
+    <link rel="stylesheet" href="css/style.css?v=25" />
   </head>
   <body>
     <div id="app">
@@ -101,7 +101,7 @@
             <button id="btn-continue" type="button" class="hidden">CONTINUAR</button>
             <button id="btn-story" type="button">HISTÓRIA</button>
             <button id="btn-survival" type="button">SOBREVIVÊNCIA</button>
-            <button id="btn-link" type="button">DOIS PILOTOS</button>
+            <button id="btn-link" type="button" class="hidden">DOIS PILOTOS</button>
           </div>
           <div class="btn-row quiet">
             <button id="btn-ranks" type="button" class="ghost">RANKING</button>
@@ -159,7 +159,7 @@
               <strong>Celular</strong>
               <ul>
                 <li>Fixo, segue o dedo, ou metade da tela</li>
-                <li>Esquerda anda, direita mira e atira</li>
+                <li>Esquerda anda; direita mira e dispara sozinha fora da zona morta</li>
                 <li>O jeito muda em Configurações</li>
                 <li>O HUD também pode ser arrastado</li>
               </ul>
@@ -238,6 +238,8 @@
               <input id="opt-volume" type="range" min="0" max="100" value="70" />
             </label>
             <label class="opt-check"><input id="opt-music" type="checkbox" /> Música</label>
+            <label class="opt-check"><input id="opt-coop" type="checkbox" /> Dois pilotos (online)</label>
+            <p class="hint">Marque para mostrar o botão no menu. Exige conta na nuvem; desligado evita expectativa de modo que não conecta.</p>
             <label class="opt-check opt-touch-only"><input id="opt-vibrate" type="checkbox" /> Vibração no celular</label>
             <label class="opt-touch-only">
               Tamanho dos analógicos
@@ -323,18 +325,18 @@
       </div>
     </div>
 
-    <script src="js/audio.js?v=24"></script>
-    <script src="js/input.js?v=24"></script>
-    <script src="js/platform.js?v=24"></script>
-    <script src="js/touch.js?v=24"></script>
-    <script src="js/entities.js?v=24"></script>
-    <script src="js/save.js?v=24"></script>
-    <script src="js/cloud.js?v=24"></script>
-    <script src="js/settings.js?v=24"></script>
-    <script src="js/story.js?v=24"></script>
-    <script src="js/net.js?v=24"></script>
-    <script src="js/game.js?v=24"></script>
-    <script src="js/main.js?v=24"></script>
+    <script src="js/audio.js?v=25"></script>
+    <script src="js/input.js?v=25"></script>
+    <script src="js/platform.js?v=25"></script>
+    <script src="js/touch.js?v=25"></script>
+    <script src="js/entities.js?v=25"></script>
+    <script src="js/save.js?v=25"></script>
+    <script src="js/cloud.js?v=25"></script>
+    <script src="js/settings.js?v=25"></script>
+    <script src="js/story.js?v=25"></script>
+    <script src="js/net.js?v=25"></script>
+    <script src="js/game.js?v=25"></script>
+    <script src="js/main.js?v=25"></script>
     <script>
       if ("serviceWorker" in navigator) {
         navigator.serviceWorker.register("sw.js", { updateViaCache: "none" });

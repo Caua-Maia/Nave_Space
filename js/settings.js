@@ -45,12 +45,14 @@ const Settings = (() => {
 
   function readForm() {
     const prev = editing && draft ? draft : current();
+    const coopEl = document.getElementById("opt-coop");
     return Save.setOptions({
       volume: Number(document.getElementById("opt-volume").value),
       music: document.getElementById("opt-music").checked,
       vibrate: document.getElementById("opt-vibrate").checked,
       stickSize: document.getElementById("opt-stick-size").value,
       touchMode: document.getElementById("opt-touch-mode").value,
+      showCoop: coopEl ? coopEl.checked : prev.showCoop,
       layout: prev.layout,
     });
   }
@@ -63,6 +65,8 @@ const Settings = (() => {
     document.getElementById("opt-vibrate").checked = opt.vibrate;
     document.getElementById("opt-stick-size").value = opt.stickSize;
     document.getElementById("opt-touch-mode").value = opt.touchMode || "fixed";
+    const coopEl = document.getElementById("opt-coop");
+    if (coopEl) coopEl.checked = opt.showCoop === true;
   }
 
   function onChange() {
@@ -70,6 +74,8 @@ const Settings = (() => {
     if (editing) draft = opt;
     document.getElementById("opt-volume-num").textContent = String(opt.volume);
     apply(opt);
+    const coopBtn = document.getElementById("btn-link");
+    if (coopBtn) coopBtn.classList.toggle("hidden", opt.showCoop !== true);
     if (opt.music) AudioFx.resume();
     if (typeof Cloud !== "undefined") Cloud.sync();
   }

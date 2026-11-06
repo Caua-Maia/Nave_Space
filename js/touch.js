@@ -1,5 +1,5 @@
 const TouchControls = (() => {
-  const DEAD = 0.18;
+  const DEAD = 0.215;
   const zero = { x: 0, y: 0, mag: 0 };
   const axes = { left: { ...zero }, right: { ...zero }, shoot: false };
   const pointers = { left: null, right: null };
@@ -62,7 +62,7 @@ const TouchControls = (() => {
       const t = Math.min(1, (raw - DEAD) / (1 - DEAD));
       axes[which] = { x: nx * t, y: ny * t, mag: t };
     }
-    if (which === "right") axes.shoot = axes.right.mag > 0.55;
+    if (which === "right") axes.shoot = axes.right.mag > DEAD;
     const base = baseOf(which);
     if (base) base.setAttribute("aria-valuenow", axes[which].mag.toFixed(2));
   }
@@ -87,7 +87,7 @@ const TouchControls = (() => {
       const t = Math.min(1, (raw - DEAD) / (1 - DEAD));
       axes[which] = { x: nx * t, y: ny * t, mag: t };
     }
-    if (which === "right") axes.shoot = axes.right.mag > 0.45;
+    if (which === "right") axes.shoot = axes.right.mag > DEAD;
     if (touchMode() === "follow") placeKnob(which, nx, ny, clamped);
   }
 
