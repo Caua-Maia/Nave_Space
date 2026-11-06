@@ -20,6 +20,7 @@ const Save = (() => {
         time: { x: 74, y: 2 },
         pad: { x: 58, y: 11 },
         boss: { x: 22, y: 74 },
+        bossMega: { x: 22, y: 74 },
         stickL: { x: 4, y: 70 },
         stickR: { x: 72, y: 70 },
         pause: { x: 38, y: 1 },

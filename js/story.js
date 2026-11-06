@@ -55,9 +55,9 @@ const Story = {
     {
       id: 8,
       title: "Núcleo",
-      briefing: "O núcleo da frota. Elimine o boss e feche a campanha.",
+      briefing: "O núcleo da frota. Derrube os geradores, rompa o escudo e destrua o núcleo.",
       type: "boss",
-      boss: "core",
+      boss: "mega",
     },
   ],
 

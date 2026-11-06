@@ -135,6 +135,16 @@ body:not([data-layout-custom="1"]) #boss-hud {
   width: min(420px, calc(100% - 190px));
 }
 
+body:not([data-layout-custom="1"]) #boss-hud-mega {
+  position: absolute;
+  left: 50%;
+  top: auto;
+  right: auto;
+  bottom: max(16px, env(safe-area-inset-bottom));
+  transform: translateX(-50%);
+  width: min(560px, calc(100% - 40px));
+}
+
 body:not([data-layout-custom="1"]) #touch-pause {
   left: 50% !important;
   top: max(6px, env(safe-area-inset-top)) !important;
@@ -261,6 +271,92 @@ body:not([data-layout-custom="1"]) #btn-fullscreen {
   height: 100%;
   width: 100%;
   background: linear-gradient(90deg, #ff4d9a, #ffb347);
+}
+
+.boss-hud-mega {
+  position: absolute;
+  left: 50%;
+  bottom: 18px;
+  transform: translateX(-50%);
+  width: min(560px, calc(100% - 40px));
+  z-index: 2;
+  text-align: center;
+}
+
+.boss-hud-mega.hidden {
+  display: none;
+}
+
+.boss-mega-title {
+  font-size: clamp(11px, 1.2vw, 13px);
+  letter-spacing: 0.22em;
+  color: var(--muted);
+  margin-bottom: 8px;
+}
+
+.weakspots-row {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.ws-bar {
+  flex: 1;
+  max-width: 160px;
+  height: 8px;
+  border: 1px solid rgba(255, 51, 102, 0.5);
+  border-radius: 99px;
+  overflow: hidden;
+  background: rgba(0, 0, 0, 0.4);
+}
+
+.ws-bar .fill {
+  height: 100%;
+  width: 100%;
+  background: linear-gradient(90deg, #ff3366, #ff9900);
+  transform-origin: left center;
+  transform: scaleX(1);
+}
+
+.core-bar-wrapper {
+  position: relative;
+  width: 100%;
+  margin-top: 4px;
+}
+
+.core-bar-track {
+  width: 100%;
+  height: 12px;
+  border: 1px solid rgba(77, 232, 255, 0.45);
+  border-radius: 99px;
+  overflow: hidden;
+  background: rgba(0, 0, 0, 0.35);
+}
+
+#boss-core-fill {
+  height: 100%;
+  width: 100%;
+  background: linear-gradient(90deg, #4de8ff, #6688ff);
+}
+
+#boss-shield-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: clamp(10px, 1.1vw, 12px);
+  letter-spacing: 0.14em;
+  color: rgba(0, 240, 255, 0.95);
+  text-shadow: 0 0 8px rgba(0, 240, 255, 0.5);
+  pointer-events: none;
+  border-radius: 99px;
+  background: rgba(5, 7, 15, 0.55);
+}
+
+#boss-shield-overlay:not(.shield-active) {
+  display: none;
 }
 
 .stat span:last-child {
@@ -894,6 +990,10 @@ body.touch-play #boss-hud {
   bottom: max(128px, calc(env(safe-area-inset-bottom) + 118px));
 }
 
+body.touch-play #boss-hud-mega {
+  bottom: max(128px, calc(env(safe-area-inset-bottom) + 118px));
+}
+
 #fs-hint {
   position: absolute;
   z-index: 50;
@@ -981,7 +1081,8 @@ body[data-stick-size="g"] .stick {
 body.hud-edit #hud.hidden,
 body.hud-edit #touch-ui.hidden,
 body.hud-edit #btn-fullscreen.hidden,
-body.hud-edit #boss-hud.hidden {
+body.hud-edit #boss-hud.hidden,
+body.hud-edit #boss-hud-mega.hidden {
   display: block !important;
 }
 
@@ -1069,6 +1170,11 @@ body.hud-edit [data-layout]::before {
 body.short-screen.touch-play #boss-hud {
   bottom: 86px;
   width: min(280px, calc(100% - 180px));
+}
+
+body.short-screen.touch-play #boss-hud-mega {
+  bottom: 86px;
+  width: min(300px, calc(100% - 180px));
 }
 
 body.short-screen h1 {

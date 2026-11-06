@@ -5,6 +5,10 @@ const AudioFx = (() => {
   let volume = 0.7;
   let wantMusic = false;
   let music = null;
+  let warningTimer = 0;
+  let beamGain = null;
+  let beamOsc = null;
+  let beamNoise = null;
 
   function ensure() {
     if (started) return;
@@ -60,6 +64,17 @@ const AudioFx = (() => {
     osc.stop(t + dur + 0.02);
   }
 
+  function stopBeamLaser() {
+    if (!started) return;
+    try {
+      if (beamOsc) beamOsc.stop();
+      if (beamNoise) beamNoise.stop();
+    } catch (err) {}
+    beamOsc = null;
+    beamNoise = null;
+    beamGain = null;
+  }
+
   return {
     resume() {
       ensure();
@@ -111,6 +126,86 @@ const AudioFx = (() => {
     },
     lose() {
       beep(110, 0.5, "sawtooth", 0.3);
+    },
+    bossWarningStart() {
+      ensure();
+      if (!started) return;
+      if (warningTimer) return;
+      const tick = () => {
+        if (!ctx) return;
+        const t0 = ctx.currentTime;
+        const o = ctx.createOscillator();
+        const g = ctx.createGain();
+        o.type = "sawtooth";
+        o.frequency.setValueAtTime(110, t0);
+        o.frequency.linearRampToValueAtTime(95, t0 + 0.35);
+        g.gain.setValueAtTime(0.12, t0);
+        g.gain.exponentialRampToValueAtTime(0.001, t0 + 0.35);
+        o.connect(g);
+        g.connect(master);
+        o.start(t0);
+        o.stop(t0 + 0.36);
+      };
+      tick();
+      warningTimer = setInterval(tick, 380);
+    },
+    bossWarningStop() {
+      if (warningTimer) {
+        clearInterval(warningTimer);
+        warningTimer = 0;
+      }
+    },
+    shieldDeflect() {
+      ensure();
+      if (!started) return;
+      const t = ctx.currentTime;
+      const o = ctx.createOscillator();
+      const filt = ctx.createBiquadFilter();
+      const g = ctx.createGain();
+      o.type = "triangle";
+      o.frequency.value = 180;
+      filt.type = "lowpass";
+      filt.frequency.value = 420;
+      g.gain.setValueAtTime(0.2, t);
+      g.gain.exponentialRampToValueAtTime(0.001, t + 0.12);
+      o.connect(filt);
+      filt.connect(g);
+      g.connect(master);
+      o.start(t);
+      o.stop(t + 0.14);
+    },
+    bossShootRing() {
+      beep(420, 0.06, "square", 0.14);
+      setTimeout(() => beep(280, 0.08, "square", 0.1), 40);
+    },
+    beamLaser() {
+      ensure();
+      if (!started) return;
+      stopBeamLaser();
+      const t = ctx.currentTime;
+      beamGain = ctx.createGain();
+      beamGain.gain.value = 0.08;
+      beamGain.connect(master);
+      beamOsc = ctx.createOscillator();
+      beamOsc.type = "sawtooth";
+      beamOsc.frequency.value = 140;
+      beamOsc.connect(beamGain);
+      beamOsc.start(t);
+      const bs = 4096;
+      const buf = ctx.createBuffer(1, bs, ctx.sampleRate);
+      const d = buf.getChannelData(0);
+      for (let i = 0; i < bs; i++) d[i] = Math.random() * 2 - 1;
+      beamNoise = ctx.createBufferSource();
+      beamNoise.buffer = buf;
+      beamNoise.loop = true;
+      const ng = ctx.createGain();
+      ng.gain.value = 0.04;
+      beamNoise.connect(ng);
+      ng.connect(beamGain);
+      beamNoise.start(t);
+    },
+    beamLaserStop() {
+      stopBeamLaser();
     },
   };
 })();

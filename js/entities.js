@@ -292,6 +292,278 @@ class Boss {
   }
 }
 
+function megaBeamDamage(ship, amount) {
+  if (!ship || ship.hp <= 0 || amount <= 0) return;
+  const prev = ship.iframes;
+  ship.iframes = 0;
+  ship.hp -= amount;
+  ship.iframes = prev;
+}
+
+class MegaBoss {
+  constructor(x, y) {
+    this.kindFlag = "mega";
+    this.kind = "mega";
+    this.name = "AMEAÇA ÔMEGA";
+    this.tier = "boss";
+    this.x = x;
+    this.y = y;
+    this.introStartY = -150;
+    this.targetAnchorY = null;
+    this.angle = Math.PI / 2;
+    this.r = 75;
+    this.coreHp = 500;
+    this.maxCoreHp = 500;
+    this.shieldActive = true;
+    this.score = 8000;
+    this.t = 0;
+    this.weakSpots = [
+      { id: "left_wing", offsetX: -65, offsetY: 10, r: 20, hp: 120, maxHp: 120, alive: true, color: "#ff3366" },
+      { id: "right_wing", offsetX: 65, offsetY: 10, r: 20, hp: 120, maxHp: 120, alive: true, color: "#ff3366" },
+      { id: "top_turret", offsetX: 0, offsetY: -45, r: 24, hp: 180, maxHp: 180, alive: true, color: "#ff9900" },
+    ];
+    this.currentPattern = "IDLE";
+    this.patternTimer = 0;
+    this.beamAngle = Math.PI / 2;
+    this.attackPhase = 0;
+    this.introLerp = 0;
+  }
+
+  getWeakSpotWorldPos(spot) {
+    const cos = Math.cos(this.angle);
+    const sin = Math.sin(this.angle);
+    return {
+      x: this.x + spot.offsetX * cos - spot.offsetY * sin,
+      y: this.y + spot.offsetX * sin + spot.offsetY * cos,
+    };
+  }
+
+  updateIntro(dt, w, h, player) {
+    if (this.targetAnchorY == null) this.targetAnchorY = h * 0.22;
+    const target = this.targetAnchorY;
+    this.introLerp = Math.min(1, this.introLerp + dt / 3);
+    this.y = this.introStartY + (target - this.introStartY) * this.introLerp;
+    this.x = w * 0.5 + Math.sin(this.t * 0.9) * 8;
+    if (player) {
+      const dx = player.x - this.x;
+      const dy = player.y - this.y;
+      this.angle = Math.atan2(dy, dx);
+    }
+    this.t += dt;
+  }
+
+  updateFight(dt, w, h, player, bullets) {
+    this.t += dt;
+    const dx = player.x - this.x;
+    const dy = player.y - this.y;
+    this.angle = Math.atan2(dy, dx);
+    if (this.currentPattern !== "DASH" && this.currentPattern !== "BEAM_FIRE") {
+      this.x += Math.sin(this.t * 1.1) * 28 * dt;
+    }
+    this.x = Math.max(this.r, Math.min(w - this.r, this.x));
+    this.y = Math.max(this.r + 40, Math.min(h * 0.38, this.y));
+
+    this.patternTimer -= dt;
+    if (this.currentPattern === "IDLE") {
+      if (this.patternTimer <= 0) {
+        this.patternTimer = 0.4;
+        if (Math.random() < 0.5) {
+          this.currentPattern = "BEAM_CHARGE";
+          this.patternTimer = 1.2;
+          this.beamAngle = Math.PI / 2;
+          this.attackPhase = 0;
+        } else {
+          this.currentPattern = "BULLET_RING";
+          this.patternTimer = 0.01;
+        }
+      }
+    } else if (this.currentPattern === "BEAM_CHARGE") {
+      if (this.patternTimer <= 0) {
+        this.currentPattern = "BEAM_FIRE";
+        this.patternTimer = 0.8;
+        AudioFx.beamLaser();
+      }
+    } else if (this.currentPattern === "BEAM_FIRE") {
+      if (this.patternTimer <= 0) {
+        AudioFx.beamLaserStop();
+        this.currentPattern = "IDLE";
+        this.patternTimer = 1.1 + Math.random() * 0.6;
+      }
+    } else if (this.currentPattern === "BULLET_RING") {
+      this.fireBulletRing(bullets);
+      this.currentPattern = "IDLE";
+      this.patternTimer = 1.4 + Math.random() * 0.5;
+    }
+  }
+
+  fireBulletRing(bullets) {
+    const total = 24;
+    const gapIndex1 = (Math.random() * total) | 0;
+    const gapIndex2 = (gapIndex1 + 1) % total;
+    for (let i = 0; i < total; i++) {
+      if (i === gapIndex1 || i === gapIndex2) continue;
+      const angle = (i / total) * TAU;
+      const speed = 220;
+      const bx = this.x + Math.cos(angle) * 24;
+      const by = this.y + Math.sin(angle) * 24;
+      bullets.push(new Bullet(bx, by, angle, speed, false, "#ff3399", 15));
+    }
+    AudioFx.bossShootRing();
+  }
+
+  applyBeamDamage(dt, w, player, remote) {
+    if (this.currentPattern !== "BEAM_FIRE") return;
+    const cx = this.x;
+    const half = 20;
+    const ymin = this.y + 40;
+    const ships = remote ? [player, remote] : [player];
+    for (const ship of ships) {
+      if (!ship || ship.hp <= 0) continue;
+      if (Math.abs(ship.x - cx) > half) continue;
+      if (ship.y < ymin - ship.r) continue;
+      megaBeamDamage(ship, 25 * dt);
+    }
+  }
+
+  draw(ctx, w, h) {
+    ctx.save();
+    ctx.translate(this.x, this.y);
+    ctx.rotate(this.angle);
+    ctx.strokeStyle = "#6688ff";
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.rect(-this.r * 0.7, -this.r * 0.45, this.r * 1.4, this.r * 0.9);
+    ctx.stroke();
+    ctx.strokeStyle = "rgba(0,240,255,0.45)";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(0, 0, this.r + (this.shieldActive ? 8 : 0), 0, TAU);
+    ctx.stroke();
+    ctx.restore();
+
+    for (const spot of this.weakSpots) {
+      if (!spot.alive) continue;
+      const p = this.getWeakSpotWorldPos(spot);
+      ctx.save();
+      ctx.strokeStyle = spot.color;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, spot.r, 0, TAU);
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    if (this.currentPattern === "BEAM_CHARGE") {
+      ctx.save();
+      ctx.strokeStyle = "rgba(255, 0, 85, 0.65)";
+      ctx.lineWidth = 2;
+      ctx.setLineDash([6, 6]);
+      ctx.beginPath();
+      ctx.moveTo(this.x, this.y + 40);
+      ctx.lineTo(this.x, this.y + 1000);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.restore();
+    } else if (this.currentPattern === "BEAM_FIRE") {
+      ctx.save();
+      ctx.shadowBlur = 20;
+      ctx.shadowColor = "#00f0ff";
+      ctx.fillStyle = "rgba(0, 240, 255, 0.85)";
+      ctx.fillRect(this.x - 20, this.y + 40, 40, h);
+      ctx.fillStyle = "#ffffff";
+      ctx.shadowBlur = 0;
+      ctx.fillRect(this.x - 6, this.y + 40, 12, h);
+      ctx.restore();
+    }
+  }
+}
+
+class BossDrone {
+  constructor(x, y, kind, target) {
+    this.x = x;
+    this.y = y;
+    this.kind = kind;
+    this.target = target;
+    this.t = 0;
+    if (kind === "repair") {
+      this.hp = 30;
+      this.r = 11;
+      this.speed = 140;
+      this.color = "#44ff99";
+    } else {
+      this.hp = 15;
+      this.r = 10;
+      this.speed = 80;
+      this.color = "#ff3355";
+      this.lockedX = target && Number.isFinite(target.x) ? target.x : x;
+      this.lockedY = target && Number.isFinite(target.y) ? target.y : y;
+    }
+  }
+  update(dt, w, h, player, megaBoss) {
+    this.t += dt;
+    if (this.kind === "repair" && megaBoss) {
+      let spot = null;
+      let best = -1;
+      for (const s of megaBoss.weakSpots) {
+        if (!s.alive) continue;
+        const ratio = s.hp / s.maxHp;
+        if (ratio > best) {
+          best = ratio;
+          spot = s;
+        }
+      }
+      if (spot) {
+        const p = megaBoss.getWeakSpotWorldPos(spot);
+        const dx = p.x - this.x;
+        const dy = p.y - this.y;
+        const d = Math.hypot(dx, dy) || 1;
+        this.x += (dx / d) * this.speed * dt;
+        this.y += (dy / d) * this.speed * dt;
+        if (d < 36) {
+          spot.hp = Math.min(spot.maxHp, spot.hp + 15 * dt);
+        }
+      } else {
+        wrap(this, w, h, this.r);
+      }
+    } else {
+      const dx = this.lockedX - this.x;
+      const dy = this.lockedY - this.y;
+      const d = Math.hypot(dx, dy) || 1;
+      this.speed = Math.min(420, this.speed + 140 * dt);
+      this.x += (dx / d) * this.speed * dt;
+      this.y += (dy / d) * this.speed * dt;
+    }
+    wrap(this, w, h, this.r);
+  }
+  draw(ctx) {
+    ctx.save();
+    ctx.translate(this.x, this.y);
+    ctx.strokeStyle = this.color;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    if (this.kind === "repair") {
+      ctx.rect(-this.r, -this.r, this.r * 2, this.r * 2);
+    } else {
+      ctx.moveTo(this.r, 0);
+      ctx.lineTo(-this.r, this.r * 0.75);
+      ctx.lineTo(-this.r * 0.5, 0);
+      ctx.lineTo(-this.r, -this.r * 0.75);
+    }
+    ctx.closePath();
+    ctx.stroke();
+    if (this.kind === "kamikaze") {
+      ctx.strokeStyle = "rgba(255,50,80,0.5)";
+      ctx.globalAlpha = 0.6;
+      ctx.beginPath();
+      ctx.moveTo(-this.r * 2, 0);
+      ctx.lineTo(-this.r * 4, 0);
+      ctx.stroke();
+      ctx.globalAlpha = 1;
+    }
+    ctx.restore();
+  }
+}
+
 const ENEMY_TIER_COLORS = ["#e8c938", "#d932c4", "#52d95c", "#f0c020", "#c018b0", "#38e078", "#ff6a00"];
 
 const PILOT_SLOT_COLORS = {
