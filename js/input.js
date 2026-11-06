@@ -6,7 +6,8 @@ const Input = (() => {
   let padMapping = "";
   const prevButtons = {};
 
-  const DEAD = 0.215;
+  // Gamepad / WASD: zona morta ~0,18. O limiar do analógico direito de tiro no celular fica em touch.js (TOUCH_FIRE_DEAD).
+  const DEAD = 0.18;
 
   function stick(x, y) {
     const mag = Math.hypot(x, y);
@@ -108,8 +109,7 @@ const Input = (() => {
             ? { x: touch.left.x, y: touch.left.y, mag: touch.left.mag }
             : kbMove;
 
-    const touchAimFire =
-      !!(touch && touch.mode && touch.right && touch.right.mag > DEAD);
+    const touchAimFire = !!(touch && touch.mode && touch.shoot);
     const kbShoot = touchAimFire || mouse.down || keys.has("Space") || keys.has("KeyJ");
     const pausePressed = justPressed(
       "pause",

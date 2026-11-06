@@ -887,9 +887,10 @@ const Game = (() => {
     let aimX = 0;
     let aimY = 0;
     let want = false;
-    const aimDead = 0.215;
-    if (input.pad && (input.pad.right.mag > aimDead || input.pad.r2 > 0.12)) {
-      if (input.pad.right.mag > aimDead) {
+    const padAimDead = 0.18;
+    const touchFireDead = 0.2;
+    if (input.pad && (input.pad.right.mag > padAimDead || input.pad.r2 > 0.12)) {
+      if (input.pad.right.mag > padAimDead) {
         aimX = input.pad.right.x;
         aimY = input.pad.right.y;
       } else {
@@ -898,7 +899,7 @@ const Game = (() => {
       }
       want = input.pad.shoot;
     } else if (input.touch && input.touch.mode) {
-      if (input.touch.right.mag > aimDead) {
+      if (input.touch.right.mag > touchFireDead - 1e-6) {
         aimX = input.touch.right.x;
         aimY = input.touch.right.y;
       } else {

@@ -402,9 +402,33 @@ class Enemy {
     const r = this.r;
     ctx.beginPath();
     if (this.type === "shooter") {
-      const w = r * 0.85;
-      const h = r * 0.95;
-      ctx.rect(-w * 0.5, -h * 0.5, w, h);
+      const bw = r * 0.92;
+      const bh = r * 0.78;
+      const jaw = bh * 0.42;
+      const open = bw * 0.34;
+      ctx.moveTo(-bw * 0.42, -bh * 0.5);
+      ctx.lineTo(bw * 0.38, -bh * 0.5);
+      ctx.lineTo(bw * 0.48, -jaw);
+      ctx.lineTo(open, -jaw);
+      ctx.lineTo(open * 0.2, 0);
+      ctx.lineTo(open, jaw);
+      ctx.lineTo(bw * 0.48, jaw);
+      ctx.lineTo(bw * 0.38, bh * 0.5);
+      ctx.lineTo(-bw * 0.42, bh * 0.5);
+      ctx.lineTo(-bw * 0.48, jaw * 0.55);
+      ctx.lineTo(-bw * 0.48, -jaw * 0.55);
+    } else if (this.type === "chaser") {
+      const bw = r * 1.05;
+      const bh = r * 0.72;
+      const ix = bw * 0.22;
+      ctx.moveTo(-bw * 0.5, -bh * 0.5);
+      ctx.lineTo(bw * 0.42, -bh * 0.5);
+      ctx.lineTo(bw * 0.5, -bh * 0.18);
+      ctx.lineTo(ix, -bh * 0.18);
+      ctx.lineTo(ix, bh * 0.18);
+      ctx.lineTo(bw * 0.5, bh * 0.18);
+      ctx.lineTo(bw * 0.42, bh * 0.5);
+      ctx.lineTo(-bw * 0.5, bh * 0.5);
     } else if (this.type === "orbit") {
       const spike = r * 1.05;
       ctx.moveTo(0, -spike);
@@ -429,9 +453,6 @@ class Enemy {
       ctx.lineTo(r * 0.95, r * 0.75);
       ctx.lineTo(0, r * 0.35);
       ctx.lineTo(-r * 0.95, r * 0.75);
-    } else if (this.type === "chaser") {
-      const br = r * 0.88;
-      ctx.rect(-br * 0.55, -br * 0.45, br * 1.1, br * 0.9);
     } else {
       ctx.moveTo(r, 0);
       ctx.lineTo(-r * 0.75, r * 0.75);

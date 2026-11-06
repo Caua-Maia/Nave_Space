@@ -1,5 +1,7 @@
 const TouchControls = (() => {
-  const DEAD = 0.215;
+  const DEAD_MOVE = 0.18;
+  /** Direito: entre 0,18 e 0,22 — evita tiro só por encostar o polegar. */
+  const DEAD_FIRE = 0.2;
   const zero = { x: 0, y: 0, mag: 0 };
   const axes = { left: { ...zero }, right: { ...zero }, shoot: false };
   const pointers = { left: null, right: null };
@@ -56,13 +58,14 @@ const TouchControls = (() => {
     const ny = dy / dist;
     placeKnob(which, nx, ny, clamped);
     const raw = clamped / max;
-    if (raw < DEAD) {
+    const dead = which === "right" ? DEAD_FIRE : DEAD_MOVE;
+    if (raw < dead) {
       axes[which] = { x: 0, y: 0, mag: 0 };
     } else {
-      const t = Math.min(1, (raw - DEAD) / (1 - DEAD));
+      const t = Math.min(1, (raw - dead) / (1 - dead));
       axes[which] = { x: nx * t, y: ny * t, mag: t };
     }
-    if (which === "right") axes.shoot = axes.right.mag > DEAD;
+    if (which === "right") axes.shoot = raw >= DEAD_FIRE;
     const base = baseOf(which);
     if (base) base.setAttribute("aria-valuenow", axes[which].mag.toFixed(2));
   }
@@ -81,13 +84,14 @@ const TouchControls = (() => {
     const nx = dx / dist;
     const ny = dy / dist;
     const raw = clamped / max;
-    if (raw < DEAD) {
+    const dead = which === "right" ? DEAD_FIRE : DEAD_MOVE;
+    if (raw < dead) {
       axes[which] = { x: 0, y: 0, mag: 0 };
     } else {
-      const t = Math.min(1, (raw - DEAD) / (1 - DEAD));
+      const t = Math.min(1, (raw - dead) / (1 - dead));
       axes[which] = { x: nx * t, y: ny * t, mag: t };
     }
-    if (which === "right") axes.shoot = axes.right.mag > DEAD;
+    if (which === "right") axes.shoot = raw >= DEAD_FIRE;
     if (touchMode() === "follow") placeKnob(which, nx, ny, clamped);
   }
 
