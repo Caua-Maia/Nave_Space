@@ -1379,11 +1379,13 @@ const Game = (() => {
     const local = ship === player;
     const hit = ship.hurt(dmg);
     if (hit.shield) {
-      burst(ship.x, ship.y, "#7cffb2", 8, 160);
+      burst(ship.x, ship.y, "#4de8ff", 14, 200);
+      burst(ship.x, ship.y, "#b8ffff", 10, 260);
+      burst(ship.x + rand(-8, 8), ship.y + rand(-8, 8), "#ffffff", 6, 320);
       if (local) {
         AudioFx.shieldHit();
-        shake = Math.max(shake, 5);
-        rumble(55, 0.28);
+        shake = Math.max(shake, 8);
+        rumble(70, 0.32);
       }
       return;
     }
@@ -1426,6 +1428,7 @@ const Game = (() => {
         if (dist2(b, rock) < (b.r + rock.r) * (b.r + rock.r)) {
           bullets.splice(i, 1);
           const bd = b.dmg || 16;
+          // HP por tiro = bulletDmg/16 (16 = Lança); sem arredondamento para não colapsar Dardo vs Lança.
           rock.hp = Math.max(0, rock.hp - bd / 16);
           burst(b.x, b.y, "#ffb347", 6, 140);
           if (rock.hp <= 0) {

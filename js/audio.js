@@ -83,8 +83,8 @@ const AudioFx = (() => {
       beep(140, 0.18, "sawtooth", 0.28);
     },
     shieldHit() {
-      beep(780, 0.09, "sine", 0.14);
-      beep(520, 0.07, "sine", 0.1);
+      beep(95, 0.14, "square", 0.2);
+      setTimeout(() => beep(55, 0.12, "sawtooth", 0.16), 35);
     },
     explode(size) {
       beep(220 - size * 18, 0.22, "triangle", 0.2);
