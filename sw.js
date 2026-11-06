@@ -1,4 +1,4 @@
-const CACHE = "space-survivor-v27";
+const CACHE = "space-survivor-v29";
 const BASE = new URL("./", self.location);
 const FILES = [
   "",

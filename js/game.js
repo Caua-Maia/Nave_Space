@@ -27,6 +27,7 @@ const Game = (() => {
   let stageDone = false;
   let pendingStage = 1;
   let scoreSaved = false;
+  let lastSaveSignature = "";
   let lastBossWave = 0;
   let surgeTimer = 14;
   let diffTier = 1;
@@ -43,6 +44,12 @@ const Game = (() => {
   let linkShip = "lanca";
   let linkHello = 0;
   let linkPendingCode = "";
+  let megaBoss = null;
+  let bossDrones = [];
+  let bossDroneTimer = 0;
+  let bossState = "INACTIVE";
+  let bossIntroTimer = 0;
+  let spawningEnabled = true;
   let worldSeq = 1;
   const els = {};
 
@@ -435,8 +442,12 @@ const Game = (() => {
     return ent.nid;
   }
 
+  function megaEncounterActive() {
+    return megaBoss && (bossState === "INTRO" || bossState === "FIGHT" || bossState === "OUTRO");
+  }
+
   function caps() {
-    const bossHere = bosses.length > 0;
+    const bossHere = bosses.length > 0 || (megaBoss && bossState === "FIGHT");
     if (likeSurvival()) {
       const d = survivalDifficulty();
       return {
@@ -506,6 +517,15 @@ const Game = (() => {
     diffTier = 1;
     survJitter = 0.88 + Math.random() * 0.28;
     survJitterSec = Math.floor(elapsed);
+    megaBoss = null;
+    bossDrones = [];
+    bossDroneTimer = 0;
+    bossState = "INACTIVE";
+    bossIntroTimer = 0;
+    spawningEnabled = true;
+    AudioFx.bossWarningStop();
+    AudioFx.beamLaserStop();
+    if (els.bossHudMega) els.bossHudMega.classList.add("hidden");
     if (mode === "link" && !linkHost()) return;
     const n = mode === "story" ? 3 : 4;
     for (let i = 0; i < n; i++) {
@@ -634,19 +654,32 @@ const Game = (() => {
   function goMenu() {
     hangupLink();
     state = "menu";
+    finishMegaBossCleanup();
     els.hud.classList.add("hidden");
     refreshTitle();
     showView("title");
   }
 
+  function saveRunSignature(name) {
+    const n = String(name || "")
+      .trim()
+      .toLowerCase();
+    const sc = Math.floor(Number(score) || 0);
+    if (state === "win") return `campaign|${sc}|${n}`;
+    if (mode === "story") return `story_over|${stageId}|${sc}|${n}`;
+    return `survival|${wave}|${sc}|${n}`;
+  }
+
   function gameOver() {
     if (state === "dead") return;
+    finishMegaBossCleanup();
     state = "dead";
     Save.clearSession();
     refreshTitle();
     AudioFx.lose();
     rumble(280, 0.7);
     scoreSaved = false;
+    lastSaveSignature = "";
     els.saveMsg.textContent = "";
     const s = data();
     els.overName.value = s.name;
@@ -678,6 +711,7 @@ const Game = (() => {
     if (stageId >= Story.stages.length) {
       state = "win";
       scoreSaved = false;
+      lastSaveSignature = "";
       els.winMsg.textContent = "";
       els.winName.value = data().name;
       els.winText.textContent = `Campanha concluída · ${score.toLocaleString("pt-BR")} pontos`;
@@ -723,6 +757,7 @@ const Game = (() => {
 
   function maybeSpawnSurvivalBoss() {
     if (!likeSurvival()) return;
+    if (megaEncounterActive()) return;
     if (bosses.length) return;
     if (wave < 3) return;
     if (wave === lastBossWave) return;
@@ -756,7 +791,183 @@ const Game = (() => {
     }, 500);
   }
 
+  function clearRocksNoScore() {
+    rocks.forEach((r) => burst(r.x, r.y, "#ffb347", 8, 150));
+    rocks = [];
+  }
+
+  function beginMegaBossEncounter() {
+    if (megaBoss) return;
+    spawningEnabled = false;
+    clearRocksNoScore();
+    enemies = [];
+    megaBoss = new MegaBoss(w * 0.5, -150);
+    megaBoss.targetAnchorY = h * 0.22;
+    bossState = "INTRO";
+    bossIntroTimer = 3;
+    bossDroneTimer = 0;
+    bossDrones = [];
+    AudioFx.bossWarningStart();
+    if (els.bossHud) els.bossHud.classList.add("hidden");
+    if (els.bossHudMega) els.bossHudMega.classList.remove("hidden");
+    updateMegaBossHud();
+  }
+
+  function triggerMegaBossDefeat() {
+    if (!megaBoss || bossState !== "FIGHT") return;
+    bossState = "OUTRO";
+    bossIntroTimer = 2;
+    addScore(megaBoss.score, megaBoss.x, megaBoss.y);
+    burst(megaBoss.x, megaBoss.y, "#6688ff", 36, 280);
+    AudioFx.explode(4);
+    rumble(280, 0.75);
+    spawningEnabled = true;
+    AudioFx.beamLaserStop();
+    AudioFx.bossWarningStop();
+  }
+
+  function finishMegaBossCleanup() {
+    AudioFx.beamLaserStop();
+    AudioFx.bossWarningStop();
+    megaBoss = null;
+    bossDrones = [];
+    bossState = "INACTIVE";
+    bossIntroTimer = 0;
+    spawningEnabled = true;
+    if (els.bossHudMega) els.bossHudMega.classList.add("hidden");
+  }
+
+  function tickMegaBossEncounter(dt) {
+    if (!megaBoss) return;
+    if (bossState === "INTRO") {
+      megaBoss.updateIntro(dt, w, h, player);
+      bossIntroTimer -= dt;
+      if (bossIntroTimer <= 0) {
+        AudioFx.bossWarningStop();
+        AudioFx.boss();
+        rumble(200, 0.5);
+        bossState = "FIGHT";
+        megaBoss.introLerp = 1;
+        megaBoss.y = megaBoss.targetAnchorY != null ? megaBoss.targetAnchorY : h * 0.22;
+        megaBoss.currentPattern = "IDLE";
+        megaBoss.patternTimer = 0.4;
+        bossDroneTimer = 11;
+      }
+    } else if (bossState === "FIGHT") {
+      megaBoss.updateFight(dt, w, h, player, bullets);
+      megaBoss.applyBeamDamage(dt, w, player, remote);
+      if (megaBoss.currentPattern === "BEAM_FIRE") shake = Math.max(shake, 8);
+      spawnMegaBossDrones(dt);
+    } else if (bossState === "OUTRO") {
+      bossIntroTimer -= dt;
+      if (bossIntroTimer <= 0) {
+        finishMegaBossCleanup();
+        if (mode === "story" && stageId === 8) completeStage();
+      }
+    }
+    updateMegaBossHud();
+  }
+
+  function spawnMegaBossDrones(dt) {
+    bossDroneTimer -= dt;
+    if (bossDroneTimer > 0) return;
+    bossDroneTimer = 12;
+    bossDrones.push(new BossDrone(-50, rand(100, h - 100), "repair", megaBoss));
+    bossDrones.push(new BossDrone(w + 50, rand(100, h - 100), "kamikaze", { x: player.x, y: player.y }));
+  }
+
+  function updateMegaBossHud() {
+    if (!megaBoss || !els.bossHudMega) return;
+    const ws = megaBoss.weakSpots;
+    const left = ws.find((s) => s.id === "left_wing");
+    const right = ws.find((s) => s.id === "right_wing");
+    const top = ws.find((s) => s.id === "top_turret");
+    const setFill = (el, cur, max) => {
+      if (!el) return;
+      el.style.width = `${Math.max(0, Math.min(100, (cur / max) * 100))}%`;
+    };
+    if (els.wsLeftFill) setFill(els.wsLeftFill, left && left.alive ? left.hp : 0, left ? left.maxHp : 1);
+    if (els.wsRightFill) setFill(els.wsRightFill, right && right.alive ? right.hp : 0, right ? right.maxHp : 1);
+    if (els.wsTopFill) setFill(els.wsTopFill, top && top.alive ? top.hp : 0, top ? top.maxHp : 1);
+    if (els.bossCoreFill)
+      els.bossCoreFill.style.width = `${Math.max(0, (megaBoss.coreHp / megaBoss.maxCoreHp) * 100)}%`;
+    if (els.bossShieldOverlay)
+      els.bossShieldOverlay.classList.toggle("shield-active", megaBoss.shieldActive);
+  }
+
+  function megaBossPlayerBulletHit(i, b) {
+    if (!megaBoss || bossState !== "FIGHT" || !b.fromPlayer || b.ghost) return false;
+    for (const spot of megaBoss.weakSpots) {
+      if (!spot.alive) continue;
+      const pos = megaBoss.getWeakSpotWorldPos(spot);
+      if (dist2(b, { x: pos.x, y: pos.y }) < (b.r + spot.r) * (b.r + spot.r)) {
+        bullets.splice(i, 1);
+        const dmg = Math.max(1, Math.round(b.dmg || 16));
+        spot.hp -= dmg;
+        burst(pos.x, pos.y, "#ffcc00", 8, 200);
+        AudioFx.hit();
+        if (spot.hp <= 0) {
+          spot.hp = 0;
+          spot.alive = false;
+          burst(pos.x, pos.y, "#ff3366", 18, 260);
+          AudioFx.explode(2);
+          addScore(500, pos.x, pos.y);
+        }
+        if (!megaBoss.weakSpots.some((s) => s.alive) && megaBoss.shieldActive) {
+          megaBoss.shieldActive = false;
+          AudioFx.explode(4);
+          rumble(180, 0.5);
+        }
+        return true;
+      }
+    }
+    if (dist2(b, megaBoss) < (b.r + megaBoss.r) * (b.r + megaBoss.r)) {
+      bullets.splice(i, 1);
+      if (megaBoss.shieldActive) {
+        burst(b.x, b.y, "#00f0ff", 5, 220);
+        AudioFx.shieldDeflect();
+      } else {
+        const dmg = Math.max(1, Math.round(b.dmg || 16));
+        megaBoss.coreHp -= dmg;
+        burst(b.x, b.y, "#ff0055", 6, 200);
+        AudioFx.hit();
+        if (megaBoss.coreHp <= 0) {
+          megaBoss.coreHp = 0;
+          triggerMegaBossDefeat();
+        }
+      }
+      return true;
+    }
+    for (let d = bossDrones.length - 1; d >= 0; d--) {
+      const dr = bossDrones[d];
+      if (dist2(b, dr) < (b.r + dr.r) * (b.r + dr.r)) {
+        bullets.splice(i, 1);
+        const dmg = Math.max(1, Math.round(b.dmg || 16));
+        dr.hp -= dmg;
+        burst(dr.x, dr.y, dr.color, 5, 160);
+        if (dr.hp <= 0) bossDrones.splice(d, 1);
+        return true;
+      }
+    }
+    return false;
+  }
+
   function spawnWaveStuff(dt) {
+    if (!spawningEnabled) {
+      spawnHeal -= dt;
+      const needy = player.hp < player.maxHp || (linkHost() && remote && remote.hp < remote.maxHp);
+      if (spawnHeal <= 0 && needy) {
+        const surv = likeSurvival() ? survivalDifficulty() : null;
+        const healWait = surv ? surv.healInterval : player.hp < 40 ? 11 : 17;
+        spawnHeal = healWait + rand(0, 4);
+        if (!megaEncounterActive() && (wave < 25 || Math.random() < 0.65)) {
+          const p = spawnEdge(w, h, 60);
+          dropHeal(Math.max(80, Math.min(w - 80, p.x)), Math.max(80, Math.min(h - 80, p.y)));
+        }
+      }
+      if (mode === "story") tickStory();
+      return;
+    }
     spawnRock -= dt;
     spawnEnemy -= dt;
     spawnHeal -= dt;
@@ -818,9 +1029,10 @@ const Game = (() => {
         spawnBoss(st.boss);
       }
     }
-    if (st.type === "boss" && elapsed > 2.2 && !bosses.length && !bossPhase) {
+    if (st.type === "boss" && elapsed > 2.2 && !bosses.length && !megaBoss && !bossPhase) {
       bossPhase = true;
-      spawnBoss(st.boss);
+      if (st.boss === "mega") beginMegaBossEncounter();
+      else spawnBoss(st.boss);
     }
   }
 
@@ -1463,6 +1675,7 @@ const Game = (() => {
         }
       }
       if (hit) continue;
+      if (megaBossPlayerBulletHit(i, b)) continue;
       for (let k = bosses.length - 1; k >= 0; k--) {
         const boss = bosses[k];
         if (dist2(b, boss) < (b.r + boss.r) * (b.r + boss.r)) {
@@ -1499,6 +1712,29 @@ const Game = (() => {
       bodyShips.forEach((ship) => {
         if (dist2(boss, ship) < (boss.r * 0.8 + ship.r) * (boss.r * 0.8 + ship.r)) strike(ship, 20);
       });
+    }
+    if (megaBoss && (bossState === "INTRO" || bossState === "FIGHT")) {
+      bodyShips.forEach((ship) => {
+        if (dist2(megaBoss, ship) < (megaBoss.r * 0.85 + ship.r) * (megaBoss.r * 0.85 + ship.r)) strike(ship, 22);
+      });
+    }
+    for (let di = bossDrones.length - 1; di >= 0; di--) {
+      const dr = bossDrones[di];
+      let hitDrone = false;
+      for (let si = 0; si < bodyShips.length && !hitDrone; si++) {
+        const ship = bodyShips[si];
+        if (dist2(dr, ship) < (dr.r + ship.r) * (dr.r + ship.r)) {
+          if (dr.kind === "kamikaze") {
+            strike(ship, 30);
+            burst(dr.x, dr.y, "#ff3355", 14, 240);
+            bossDrones.splice(di, 1);
+            AudioFx.explode(2);
+          } else {
+            strike(ship, 8);
+          }
+          hitDrone = true;
+        }
+      }
     }
     for (let i = powers.length - 1; i >= 0; i--) {
       const p = powers[i];
@@ -1585,6 +1821,8 @@ const Game = (() => {
     rocks.forEach((r) => r.update(dt, w, h));
     enemies.forEach((e) => e.update(dt, w, h, pilotTarget(e), bullets));
     bosses.forEach((b) => b.update(dt, w, h, pilotTarget(b), bullets));
+    tickMegaBossEncounter(dt);
+    bossDrones.forEach((d) => d.update(dt, w, h, player, megaBoss));
     bullets.forEach((b) => b.update(dt, w, h));
     particles.forEach((p) => p.update(dt));
     powers.forEach((p) => p.update(dt));
@@ -1616,8 +1854,8 @@ const Game = (() => {
         score: stageScore,
         elapsed,
         bossPhase,
-        bossAlive: bosses.length > 0,
-        bossName: bosses[0] && bosses[0].name,
+        bossAlive: bosses.length > 0 || megaEncounterActive(),
+        bossName: (bosses[0] && bosses[0].name) || (megaBoss && megaBoss.name),
       });
     } else if (mode === "link") {
       els.wave.textContent = `ONDA ${wave} · T${diffTier}`;
@@ -1632,12 +1870,17 @@ const Game = (() => {
         : `PRESSÃO ${(1 + wave * 0.045 + elapsed * 0.0055).toFixed(1)} · + cura · surtos`;
     }
     els.pad.textContent = Input.status();
-    if (bosses[0]) {
-      els.bossHud.classList.remove("hidden");
+    if (megaBoss && megaEncounterActive()) {
+      if (els.bossHud) els.bossHud.classList.add("hidden");
+      updateMegaBossHud();
+    } else if (bosses[0]) {
+      if (els.bossHud) els.bossHud.classList.remove("hidden");
       els.bossName.textContent = bosses[0].name;
-      els.bossHp.style.width = `${Math.max(0, (bosses[0].hp / bosses[0].maxHp) * 100)}%`;
+      if (els.bossHp) els.bossHp.style.width = `${Math.max(0, (bosses[0].hp / bosses[0].maxHp) * 100)}%`;
+      if (els.bossHudMega) els.bossHudMega.classList.add("hidden");
     } else {
-      els.bossHud.classList.add("hidden");
+      if (els.bossHud) els.bossHud.classList.add("hidden");
+      if (els.bossHudMega) els.bossHudMega.classList.add("hidden");
     }
   }
 
@@ -1659,6 +1902,8 @@ const Game = (() => {
     rocks.forEach((r) => r.draw(ctx));
     enemies.forEach((e) => e.draw(ctx));
     bosses.forEach((b) => b.draw(ctx));
+    if (megaBoss && (bossState === "INTRO" || bossState === "FIGHT" || bossState === "OUTRO")) megaBoss.draw(ctx, w, h);
+    bossDrones.forEach((d) => d.draw(ctx));
     powers.forEach((p) => p.draw(ctx));
     bullets.forEach((b) => b.draw(ctx));
     particles.forEach((p) => p.draw(ctx));
@@ -1860,8 +2105,9 @@ const Game = (() => {
       if (mode === "link") return;
       const name = commitName(els.overName.value);
       const shipId = data().shipId;
-      if (scoreSaved) {
-        els.saveMsg.textContent = "Essa run já foi salva.";
+      const sig = saveRunSignature(name);
+      if (scoreSaved && sig === lastSaveSignature) {
+        els.saveMsg.textContent = "Essa combinação (nome e esta run) já foi salva.";
         return;
       }
       if (mode === "story") {
@@ -1872,6 +2118,7 @@ const Game = (() => {
         if (typeof Cloud !== "undefined") Cloud.pushScore("survival", { name, score, extra: `onda ${wave}` });
       }
       scoreSaved = true;
+      lastSaveSignature = sig;
       els.saveMsg.textContent = `Registro de ${name || "ANÔNIMO"} salvo.`;
     });
     els.btnRetry.addEventListener("click", () => {
@@ -1883,13 +2130,15 @@ const Game = (() => {
     els.btnClearMenu.addEventListener("click", goMenu);
     els.btnWinSave.addEventListener("click", () => {
       const name = commitName(els.winName.value);
-      if (scoreSaved) {
-        els.winMsg.textContent = "Já registrado.";
+      const sig = saveRunSignature(name);
+      if (scoreSaved && sig === lastSaveSignature) {
+        els.winMsg.textContent = "Essa combinação (nome e esta campanha) já foi salva.";
         return;
       }
       Save.pushBoard("story", { name, score, extra: "campanha" });
       if (typeof Cloud !== "undefined") Cloud.pushScore("story", { name, score, extra: "campanha" });
       scoreSaved = true;
+      lastSaveSignature = sig;
       els.winMsg.textContent = `Vitória de ${name || "ANÔNIMO"} no ranking.`;
     });
     els.btnWinMenu.addEventListener("click", goMenu);
@@ -1975,6 +2224,12 @@ const Game = (() => {
     els.bossHud = document.getElementById("boss-hud");
     els.bossName = document.getElementById("boss-name");
     els.bossHp = document.getElementById("boss-hp");
+    els.bossHudMega = document.getElementById("boss-hud-mega");
+    els.wsLeftFill = document.getElementById("ws-left-fill");
+    els.wsTopFill = document.getElementById("ws-top-fill");
+    els.wsRightFill = document.getElementById("ws-right-fill");
+    els.bossCoreFill = document.getElementById("boss-core-fill");
+    els.bossShieldOverlay = document.getElementById("boss-shield-overlay");
 
     Input.attach(canvas);
     Settings.bind();
