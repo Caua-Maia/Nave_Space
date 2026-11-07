@@ -304,23 +304,25 @@ class MegaBoss {
   constructor(x, y) {
     this.kindFlag = "mega";
     this.kind = "mega";
-    this.name = "AMEAÇA ÔMEGA";
+    this.name = "TITAN HEXAGONAL";
     this.tier = "boss";
     this.x = x;
     this.y = y;
     this.introStartY = -150;
     this.targetAnchorY = null;
     this.angle = Math.PI / 2;
-    this.r = 75;
-    this.coreHp = 500;
-    this.maxCoreHp = 500;
+    this.r = 70;
+    this.coreHp = 400;
+    this.maxCoreHp = 400;
     this.shieldActive = true;
+    this.alive = true;
     this.score = 8000;
     this.t = 0;
+    this.pulseAngle = 0;
     this.weakSpots = [
-      { id: "left_wing", offsetX: -65, offsetY: 10, r: 20, hp: 120, maxHp: 120, alive: true, color: "#ff3366" },
-      { id: "right_wing", offsetX: 65, offsetY: 10, r: 20, hp: 120, maxHp: 120, alive: true, color: "#ff3366" },
-      { id: "top_turret", offsetX: 0, offsetY: -45, r: 24, hp: 180, maxHp: 180, alive: true, color: "#ff9900" },
+      { id: "left_wing", offsetX: -75, offsetY: 15, r: 18, hp: 100, maxHp: 100, alive: true },
+      { id: "right_wing", offsetX: 75, offsetY: 15, r: 18, hp: 100, maxHp: 100, alive: true },
+      { id: "top_turret", offsetX: 0, offsetY: -50, r: 22, hp: 140, maxHp: 140, alive: true },
     ];
     this.currentPattern = "IDLE";
     this.patternTimer = 0;
@@ -329,16 +331,30 @@ class MegaBoss {
     this.introLerp = 0;
   }
 
+  orientRad() {
+    return this.angle - Math.PI / 2;
+  }
+
   getWeakSpotWorldPos(spot) {
-    const cos = Math.cos(this.angle);
-    const sin = Math.sin(this.angle);
+    const cos = Math.cos(this.orientRad());
+    const sin = Math.sin(this.orientRad());
     return {
       x: this.x + spot.offsetX * cos - spot.offsetY * sin,
       y: this.y + spot.offsetX * sin + spot.offsetY * cos,
     };
   }
 
+  syncShieldFromWeakSpots() {
+    if (!this.shieldActive) return;
+    const anyAlive = this.weakSpots.some((s) => s.alive);
+    if (!anyAlive) {
+      this.shieldActive = false;
+      AudioFx.explode(4);
+    }
+  }
+
   updateIntro(dt, w, h, player) {
+    if (!this.alive) return;
     if (this.targetAnchorY == null) this.targetAnchorY = h * 0.22;
     const target = this.targetAnchorY;
     this.introLerp = Math.min(1, this.introLerp + dt / 3);
@@ -350,18 +366,22 @@ class MegaBoss {
       this.angle = Math.atan2(dy, dx);
     }
     this.t += dt;
+    this.pulseAngle += dt * 3;
   }
 
   updateFight(dt, w, h, player, bullets) {
+    if (!this.alive) return;
     this.t += dt;
+    this.pulseAngle += dt * 3;
     const dx = player.x - this.x;
     const dy = player.y - this.y;
     this.angle = Math.atan2(dy, dx);
-    if (this.currentPattern !== "DASH" && this.currentPattern !== "BEAM_FIRE") {
+    if (this.currentPattern !== "BEAM_FIRE") {
       this.x += Math.sin(this.t * 1.1) * 28 * dt;
     }
     this.x = Math.max(this.r, Math.min(w - this.r, this.x));
     this.y = Math.max(this.r + 40, Math.min(h * 0.38, this.y));
+    this.syncShieldFromWeakSpots();
 
     this.patternTimer -= dt;
     if (this.currentPattern === "IDLE") {
@@ -412,7 +432,7 @@ class MegaBoss {
   }
 
   applyBeamDamage(dt, w, player, remote) {
-    if (this.currentPattern !== "BEAM_FIRE") return;
+    if (!this.alive || this.currentPattern !== "BEAM_FIRE") return;
     const cx = this.x;
     const half = 20;
     const ymin = this.y + 40;
@@ -425,31 +445,89 @@ class MegaBoss {
     }
   }
 
+  traceHullPath(ctx) {
+    ctx.beginPath();
+    ctx.moveTo(0, -60);
+    ctx.lineTo(55, -25);
+    ctx.lineTo(65, 40);
+    ctx.lineTo(0, 65);
+    ctx.lineTo(-65, 40);
+    ctx.lineTo(-55, -25);
+    ctx.closePath();
+  }
+
+  traceOctagon(ctx, radius) {
+    ctx.beginPath();
+    for (let i = 0; i < 8; i++) {
+      const a = (i / 8) * TAU - Math.PI / 2;
+      const px = Math.cos(a) * radius;
+      const py = Math.sin(a) * radius;
+      if (i === 0) ctx.moveTo(px, py);
+      else ctx.lineTo(px, py);
+    }
+    ctx.closePath();
+  }
+
+  drawDiamondReactor(ctx, spot) {
+    const r = spot.r;
+    ctx.beginPath();
+    ctx.moveTo(0, -r);
+    ctx.lineTo(r, 0);
+    ctx.lineTo(0, r);
+    ctx.lineTo(-r, 0);
+    ctx.closePath();
+    ctx.fillStyle = "#ff9900";
+    ctx.shadowBlur = 12;
+    ctx.shadowColor = "#ff9900";
+    ctx.fill();
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = "#ffffff";
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+  }
+
   draw(ctx, w, h) {
+    if (!this.alive) return;
+
     ctx.save();
     ctx.translate(this.x, this.y);
-    ctx.rotate(this.angle);
-    ctx.strokeStyle = "#6688ff";
+    ctx.rotate(this.orientRad());
+
+    this.traceHullPath(ctx);
+    ctx.fillStyle = "#1a1d28";
+    ctx.fill();
     ctx.lineWidth = 3;
-    ctx.beginPath();
-    ctx.rect(-this.r * 0.7, -this.r * 0.45, this.r * 1.4, this.r * 0.9);
+    ctx.strokeStyle = this.shieldActive ? "#ff0055" : "#00f0ff";
     ctx.stroke();
-    ctx.strokeStyle = "rgba(0,240,255,0.45)";
-    ctx.lineWidth = 2;
+
     ctx.beginPath();
-    ctx.arc(0, 0, this.r + (this.shieldActive ? 8 : 0), 0, TAU);
+    ctx.moveTo(0, -35);
+    ctx.lineTo(25, 10);
+    ctx.lineTo(-25, 10);
+    ctx.closePath();
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.2)";
+    ctx.lineWidth = 1.5;
     ctx.stroke();
+
+    if (this.shieldActive) {
+      const shieldScale = 1 + Math.sin(this.pulseAngle) * 0.03;
+      const rad = (this.r + 15) * shieldScale;
+      this.traceOctagon(ctx, rad);
+      ctx.fillStyle = "rgba(0, 240, 255, 0.25)";
+      ctx.fill();
+      ctx.strokeStyle = "rgba(0, 240, 255, 0.6)";
+      ctx.lineWidth = 2;
+      ctx.stroke();
+    }
+
     ctx.restore();
 
     for (const spot of this.weakSpots) {
       if (!spot.alive) continue;
-      const p = this.getWeakSpotWorldPos(spot);
+      const pos = this.getWeakSpotWorldPos(spot);
       ctx.save();
-      ctx.strokeStyle = spot.color;
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.arc(p.x, p.y, spot.r, 0, TAU);
-      ctx.stroke();
+      ctx.translate(pos.x, pos.y);
+      this.drawDiamondReactor(ctx, spot);
       ctx.restore();
     }
 
@@ -460,7 +538,7 @@ class MegaBoss {
       ctx.setLineDash([6, 6]);
       ctx.beginPath();
       ctx.moveTo(this.x, this.y + 40);
-      ctx.lineTo(this.x, this.y + 1000);
+      ctx.lineTo(this.x, this.y + h);
       ctx.stroke();
       ctx.setLineDash([]);
       ctx.restore();

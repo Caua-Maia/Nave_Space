@@ -796,12 +796,12 @@ const Game = (() => {
     rocks = [];
   }
 
-  function beginMegaBossEncounter() {
-    if (megaBoss) return;
+  function spawnMegaBoss() {
+    rocks.length = 0;
+    enemies.length = 0;
     spawningEnabled = false;
-    clearRocksNoScore();
-    enemies = [];
-    megaBoss = new MegaBoss(w * 0.5, -150);
+    megaBoss = new MegaBoss(w * 0.5, -100);
+    megaBoss.introStartY = -100;
     megaBoss.targetAnchorY = h * 0.22;
     bossState = "INTRO";
     bossIntroTimer = 3;
@@ -813,8 +813,14 @@ const Game = (() => {
     updateMegaBossHud();
   }
 
+  function beginMegaBossEncounter() {
+    if (megaBoss) return;
+    spawnMegaBoss();
+  }
+
   function triggerMegaBossDefeat() {
     if (!megaBoss || bossState !== "FIGHT") return;
+    megaBoss.alive = false;
     bossState = "OUTRO";
     bossIntroTimer = 2;
     addScore(megaBoss.score, megaBoss.x, megaBoss.y);
@@ -896,7 +902,7 @@ const Game = (() => {
   }
 
   function megaBossPlayerBulletHit(i, b) {
-    if (!megaBoss || bossState !== "FIGHT" || !b.fromPlayer || b.ghost) return false;
+    if (!megaBoss || !megaBoss.alive || bossState !== "FIGHT" || !b.fromPlayer || b.ghost) return false;
     for (const spot of megaBoss.weakSpots) {
       if (!spot.alive) continue;
       const pos = megaBoss.getWeakSpotWorldPos(spot);
