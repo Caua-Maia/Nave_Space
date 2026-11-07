@@ -1,0 +1,69 @@
+{
+  "version": 1,
+  "skills": {
+    "audio-design": {
+      "source": "gamedev-skills/awesome-gamedev-agent-skills",
+      "sourceType": "github",
+      "skillPath": "skills/disciplines/audio-design/SKILL.md",
+      "computedHash": "dd4b1f676486c3bdc3c9a6ab77c0e37135263fbe6ed6c0fd1c456d8dc20f9a00",
+      "installMode": "copy"
+    },
+    "create-game-assets": {
+      "source": "gamedev-skills/awesome-gamedev-agent-skills",
+      "sourceType": "github",
+      "skillPath": "skills/disciplines/create-game-assets/SKILL.md",
+      "computedHash": "4531191945f6a6f64c280f8468f916aba42459c4e2f090b199b4edfe78474576",
+      "installMode": "copy"
+    },
+    "develop-web-game": {
+      "source": "openai/skills",
+      "ref": "30444aed500c00c85294d12074f6e3ee794f808a",
+      "sourceType": "github",
+      "skillPath": "skills/.curated/develop-web-game/SKILL.md",
+      "computedHash": "d00d7841384feb1e6b01e15d3bf2fadee7aa1523af175f1e5f74f41c3b2a54c0",
+      "installMode": "copy"
+    },
+    "game-ai": {
+      "source": "gamedev-skills/awesome-gamedev-agent-skills",
+      "sourceType": "github",
+      "skillPath": "skills/disciplines/game-ai/SKILL.md",
+      "computedHash": "c6120a671e8c39cd93b4fec6599761b289452fad6608031ea604dbbbb114a99c",
+      "installMode": "copy"
+    },
+    "game-feel": {
+      "source": "gamedev-skills/awesome-gamedev-agent-skills",
+      "sourceType": "github",
+      "skillPath": "skills/disciplines/game-feel/SKILL.md",
+      "computedHash": "190f588bf95cd2b06b737465a29deaf82b20f185248bad827d1c3135d8953a99",
+      "installMode": "copy"
+    },
+    "game-ui-ux": {
+      "source": "gamedev-skills/awesome-gamedev-agent-skills",
+      "sourceType": "github",
+      "skillPath": "skills/disciplines/game-ui-ux/SKILL.md",
+      "computedHash": "8a2d29f6b8abdb8dff0eb628bdd010badc46054d6cbb8d3adc14dfe719dd4127",
+      "installMode": "copy"
+    },
+    "input-systems": {
+      "source": "gamedev-skills/awesome-gamedev-agent-skills",
+      "sourceType": "github",
+      "skillPath": "skills/disciplines/input-systems/SKILL.md",
+      "computedHash": "2d5a6b633eddb8ce1b5cf384947a86079a2ec58c3c388e9d89a04ff9cf7cd131",
+      "installMode": "copy"
+    },
+    "performance-optimization": {
+      "source": "gamedev-skills/awesome-gamedev-agent-skills",
+      "sourceType": "github",
+      "skillPath": "skills/disciplines/performance-optimization/SKILL.md",
+      "computedHash": "a17ae684600d8f3a26c0f6af310870b158e1b5b883458bbdc9ea201b9bb60835",
+      "installMode": "copy"
+    },
+    "web-canvas-rendering": {
+      "source": "mrcalderon3d/everything-game-dev-code",
+      "sourceType": "github",
+      "skillPath": "skills/web/web-canvas-rendering/SKILL.md",
+      "computedHash": "37049daf589e8e4684a406d5f04836e09fcf457c6ace7d206b3adaee402010db",
+      "installMode": "copy"
+    }
+  }
+}
