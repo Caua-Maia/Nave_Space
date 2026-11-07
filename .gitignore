@@ -1,6 +1,7 @@
 .playwright-mcp/
 *.png
 !icons/*.png
+!.agents/skills/**/*.png
 __pycache__/
 .DS_Store
 Thumbs.db
