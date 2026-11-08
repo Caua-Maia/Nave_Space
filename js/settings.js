@@ -21,6 +21,20 @@ const Settings = (() => {
     el.style.transform = "none";
   }
 
+  function isBossHud(el) {
+    const key = el && el.dataset.layout;
+    return key === "boss" || key === "bossMega";
+  }
+
+  function clearPlaced(el) {
+    if (!el) return;
+    el.style.left = "";
+    el.style.top = "";
+    el.style.right = "";
+    el.style.bottom = "";
+    el.style.transform = "";
+  }
+
   function apply(options) {
     if (typeof Platform !== "undefined") Platform.sync();
     const opt = options || current();
@@ -31,14 +45,16 @@ const Settings = (() => {
     const custom = !!(opt.layoutCustom || editing);
     document.body.dataset.layoutCustom = custom ? "1" : "0";
     document.querySelectorAll("[data-layout]").forEach((el) => {
+      const key = el.dataset.layout;
+      const boss = isBossHud(el);
+      if (boss && !editing) {
+        clearPlaced(el);
+        return;
+      }
       if (custom) {
-        place(el, opt.layout[el.dataset.layout]);
+        place(el, opt.layout[key]);
       } else {
-        el.style.left = "";
-        el.style.top = "";
-        el.style.right = "";
-        el.style.bottom = "";
-        el.style.transform = "";
+        clearPlaced(el);
       }
     });
   }
@@ -127,7 +143,7 @@ const Settings = (() => {
     bar.className = "hidden";
     bar.innerHTML =
       '<p class="mobile-only">Arraste vida, onda, analógicos e pausa.</p>' +
-      '<p class="desktop-only">Arraste vida, onda, score e tempo no HUD.</p>' +
+      '<p class="desktop-only">Arraste vida, onda, score, combo, tempo e boss no HUD.</p>' +
       '<div class="btn-row">' +
       '<button type="button" id="hud-edit-reset" class="ghost">POSIÇÃO PADRÃO</button>' +
       '<button type="button" id="hud-edit-done">PRONTO</button>' +

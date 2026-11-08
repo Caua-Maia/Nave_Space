@@ -29,7 +29,7 @@
     <link rel="manifest" href="manifest.json" />
     <link rel="icon" href="icons/icon-192.png" />
     <link rel="apple-touch-icon" href="icons/icon-192.png" />
-    <link rel="stylesheet" href="css/style.css?v=30" />
+    <link rel="stylesheet" href="css/style.css?v=32" />
   </head>
   <body>
     <div id="app">
@@ -45,25 +45,27 @@
             </div>
             <span id="ship-name">Lança</span>
           </div>
-          <div class="stat" data-hud="score" data-layout="score" data-label="Score">
-            <span class="label">SCORE</span>
-            <span id="score">0</span>
-          </div>
-          <div class="stat" data-hud="combo" data-layout="combo" data-label="Combo">
-            <span class="label">COMBO</span>
-            <span id="combo">x1</span>
-          </div>
-        </div>
-        <div class="hud-center">
           <div id="wave" data-hud="wave" data-layout="wave" data-label="Onda">ONDA 1</div>
           <div id="objective" data-hud="objective" data-layout="objective" data-label="Objetivo">SOBREVIVA</div>
+          <div class="stat pad-status" id="pad-status" data-hud="pad" data-layout="pad" data-label="Controle">Controle: —</div>
+        </div>
+        <div class="hud-center">
+          <div class="hud-stats-row">
+            <div class="stat hud-stat-score" data-hud="score" data-layout="score" data-label="Score">
+              <span class="label">SCORE</span>
+              <span id="score">0</span>
+            </div>
+            <div class="stat hud-stat-combo" data-hud="combo" data-layout="combo" data-label="Combo">
+              <span class="label">COMBO</span>
+              <span id="combo">x1</span>
+            </div>
+          </div>
         </div>
         <div class="hud-right">
           <div class="stat" data-hud="time" data-layout="time" data-label="Tempo">
             <span class="label">TEMPO</span>
             <span id="time">0:00</span>
           </div>
-          <div class="stat pad-status" id="pad-status" data-hud="pad" data-layout="pad" data-label="Controle">Controle: —</div>
         </div>
         <div id="boss-hud" class="hidden" data-layout="boss" data-label="Boss">
           <div id="boss-name">BOSS</div>
@@ -337,18 +339,18 @@
       </div>
     </div>
 
-    <script src="js/audio.js?v=30"></script>
-    <script src="js/input.js?v=30"></script>
-    <script src="js/platform.js?v=30"></script>
-    <script src="js/touch.js?v=30"></script>
-    <script src="js/entities.js?v=30"></script>
-    <script src="js/save.js?v=30"></script>
-    <script src="js/cloud.js?v=30"></script>
-    <script src="js/settings.js?v=30"></script>
-    <script src="js/story.js?v=30"></script>
-    <script src="js/net.js?v=30"></script>
-    <script src="js/game.js?v=30"></script>
-    <script src="js/main.js?v=30"></script>
+    <script src="js/audio.js?v=32"></script>
+    <script src="js/input.js?v=32"></script>
+    <script src="js/platform.js?v=32"></script>
+    <script src="js/touch.js?v=32"></script>
+    <script src="js/entities.js?v=32"></script>
+    <script src="js/save.js?v=32"></script>
+    <script src="js/cloud.js?v=32"></script>
+    <script src="js/settings.js?v=32"></script>
+    <script src="js/story.js?v=32"></script>
+    <script src="js/net.js?v=32"></script>
+    <script src="js/game.js?v=32"></script>
+    <script src="js/main.js?v=32"></script>
     <script>
       if ("serviceWorker" in navigator) {
         navigator.serviceWorker.register("sw.js", { updateViaCache: "none" });
