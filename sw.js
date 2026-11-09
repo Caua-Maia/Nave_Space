@@ -1,4 +1,4 @@
-const CACHE = "space-survivor-v32";
+const CACHE = "space-survivor-v42";
 const BASE = new URL("./", self.location);
 const FILES = [
   "",
@@ -14,6 +14,9 @@ const FILES = [
   "js/settings.js",
   "js/story.js",
   "js/net.js",
+  "js/megaboss-survival.js",
+  "js/megaboss-prisma.js",
+  "js/megaboss-orbita.js",
   "js/game.js",
   "js/main.js",
   "manifest.json",

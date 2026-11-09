@@ -49,6 +49,10 @@ const Game = (() => {
   let bossDroneTimer = 0;
   let bossState = "INACTIVE";
   let bossIntroTimer = 0;
+  let bossWarnTimer = 0;
+  let survivalMegaTypeId = "titan";
+  let comboGraceLeft = 0;
+  let comboWasLocked = false;
   let spawningEnabled = true;
   let worldSeq = 1;
   const els = {};
@@ -443,7 +447,32 @@ const Game = (() => {
   }
 
   function megaEncounterActive() {
+    if (bossState === "WARN") return true;
     return megaBoss && (bossState === "INTRO" || bossState === "FIGHT" || bossState === "OUTRO");
+  }
+
+  function comboLocked() {
+    return megaEncounterActive() || comboGraceLeft > 0;
+  }
+
+  function comboTimerMax() {
+    return typeof SurvivalMega !== "undefined" ? SurvivalMega.COMBO_TIMER_MAX : 2.1;
+  }
+
+  function updateCombo(dt) {
+    const locked = comboLocked();
+    if (locked) {
+      if (combo > 0) comboTime = comboTimerMax();
+      if (!megaEncounterActive() && comboGraceLeft > 0) comboGraceLeft -= dt;
+      comboWasLocked = true;
+      return;
+    }
+    if (comboWasLocked && combo > 0) {
+      comboTime = comboTimerMax();
+      comboWasLocked = false;
+    }
+    comboTime -= dt;
+    if (comboTime <= 0) combo = 0;
   }
 
   function caps() {
@@ -522,6 +551,10 @@ const Game = (() => {
     bossDroneTimer = 0;
     bossState = "INACTIVE";
     bossIntroTimer = 0;
+    bossWarnTimer = 0;
+    comboGraceLeft = 0;
+    comboWasLocked = false;
+    survivalMegaTypeId = "titan";
     spawningEnabled = true;
     AudioFx.bossWarningStop();
     AudioFx.beamLaserStop();
@@ -761,6 +794,13 @@ const Game = (() => {
     if (bosses.length) return;
     if (wave < 3) return;
     if (wave === lastBossWave) return;
+    if (typeof SurvivalMega !== "undefined") {
+      if (wave >= SurvivalMega.MIN_WAVE && wave % SurvivalMega.WAVE_INTERVAL === 0) {
+        lastBossWave = wave;
+        announceSurvivalMega();
+        return;
+      }
+    }
     const atBoss = wave % 8 === 0;
     const atMini = wave % 4 === 0;
     const chaos = wave > 20 && Math.random() < 0.12;
@@ -796,21 +836,60 @@ const Game = (() => {
     rocks = [];
   }
 
+  function materializeMegaEntity() {
+    if (megaBoss && megaBoss.survivalMode) return megaBoss;
+    if (megaBoss) return megaBoss;
+    const cycle = typeof SurvivalMega !== "undefined" ? SurvivalMega.defeatedCount() : 0;
+    if (typeof SurvivalMega !== "undefined" && survivalMegaTypeId) {
+      megaBoss = SurvivalMega.createInstance(survivalMegaTypeId, w * 0.5, -100, cycle, w, h);
+    } else {
+      megaBoss = new MegaBoss(w * 0.5, -100);
+    }
+    megaBoss.introStartY = megaBoss.introStartY != null ? megaBoss.introStartY : -100;
+    if (megaBoss.targetAnchorY == null) megaBoss.targetAnchorY = h * 0.22;
+    bossDroneTimer = 0;
+    bossDrones = [];
+    if (els.bossHud) els.bossHud.classList.add("hidden");
+    if (els.bossHudMega) els.bossHudMega.classList.remove("hidden");
+    updateMegaBossHud();
+    return megaBoss;
+  }
+
+  function announceSurvivalMega(forceTypeId) {
+    if (!likeSurvival() || megaEncounterActive()) return;
+    const cycle = typeof SurvivalMega !== "undefined" ? SurvivalMega.defeatedCount() : 0;
+    survivalMegaTypeId =
+      forceTypeId || (typeof SurvivalMega !== "undefined" ? SurvivalMega.pickType(cycle) : "titan");
+    if (typeof SurvivalMega !== "undefined") SurvivalMega.startEncounter();
+    rocks.length = 0;
+    enemies.length = 0;
+    bosses.length = 0;
+    spawningEnabled = false;
+    megaBoss = null;
+    bossState = "WARN";
+    bossWarnTimer = typeof SurvivalMega !== "undefined" ? SurvivalMega.WARN_SEC : 2.5;
+    comboGraceLeft = 0;
+    if (combo > 0) comboTime = comboTimerMax();
+    const label =
+      typeof SurvivalMega !== "undefined" ? SurvivalMega.def(survivalMegaTypeId).name : "MEGA BOSS";
+    els.flash.textContent = `ALERTA — ${label}`;
+    els.flash.style.opacity = "1";
+    setTimeout(() => {
+      els.flash.style.opacity = "0";
+    }, 900);
+    AudioFx.bossWarningStart();
+    rumble(120, 0.35);
+    if (els.bossHudMega) els.bossHudMega.classList.add("hidden");
+  }
+
   function spawnMegaBoss() {
     rocks.length = 0;
     enemies.length = 0;
     spawningEnabled = false;
-    megaBoss = new MegaBoss(w * 0.5, -100);
-    megaBoss.introStartY = -100;
-    megaBoss.targetAnchorY = h * 0.22;
+    materializeMegaEntity();
     bossState = "INTRO";
     bossIntroTimer = 3;
-    bossDroneTimer = 0;
-    bossDrones = [];
     AudioFx.bossWarningStart();
-    if (els.bossHud) els.bossHud.classList.add("hidden");
-    if (els.bossHudMega) els.bossHudMega.classList.remove("hidden");
-    updateMegaBossHud();
   }
 
   function beginMegaBossEncounter() {
@@ -827,6 +906,14 @@ const Game = (() => {
     burst(megaBoss.x, megaBoss.y, "#6688ff", 36, 280);
     AudioFx.explode(4);
     rumble(280, 0.75);
+    if (megaBoss.survivalMode && typeof SurvivalMega !== "undefined") {
+      SurvivalMega.onVictory();
+      comboGraceLeft = SurvivalMega.COMBO_GRACE;
+      comboTime = comboTimerMax();
+      shake = Math.max(shake, 14);
+      if (player.hp < player.maxHp) dropHeal(megaBoss.x, megaBoss.y);
+      else if (Math.random() < 0.55) powers.push(new PowerUp(megaBoss.x, megaBoss.y, "shield"));
+    }
     spawningEnabled = true;
     AudioFx.beamLaserStop();
     AudioFx.bossWarningStop();
@@ -844,6 +931,17 @@ const Game = (() => {
   }
 
   function tickMegaBossEncounter(dt) {
+    if (bossState === "WARN") {
+      bossWarnTimer -= dt;
+      if (bossWarnTimer <= 0) {
+        AudioFx.bossWarningStop();
+        materializeMegaEntity();
+        bossState = "INTRO";
+        bossIntroTimer = 3;
+        AudioFx.bossWarningStart();
+      }
+      return;
+    }
     if (!megaBoss) return;
     if (bossState === "INTRO") {
       megaBoss.updateIntro(dt, w, h, player);
@@ -860,9 +958,17 @@ const Game = (() => {
         bossDroneTimer = 11;
       }
     } else if (bossState === "FIGHT") {
+      if (megaBoss.survivalMode && typeof SurvivalMega !== "undefined") {
+        SurvivalMega.tickPhase(dt, megaBoss);
+        if (megaBoss.survivalPhase != null) megaBoss.survivalPhase = SurvivalMega.getPhase();
+      }
       megaBoss.updateFight(dt, w, h, player, bullets);
-      megaBoss.applyBeamDamage(dt, w, player, remote);
-      if (megaBoss.currentPattern === "BEAM_FIRE") shake = Math.max(shake, 8);
+      if (typeof megaBoss.applyHazards === "function") megaBoss.applyHazards(dt, w, h, player, remote);
+      else megaBoss.applyBeamDamage(dt, w, player, remote);
+      const firing =
+        megaBoss.currentPattern === "BEAM_FIRE" ||
+        megaBoss.currentPattern === "SWEEP_FIRE";
+      if (firing) shake = Math.max(shake, megaBoss.profileId === "prisma" ? 6 : 8);
       spawnMegaBossDrones(dt);
     } else if (bossState === "OUTRO") {
       bossIntroTimer -= dt;
@@ -875,6 +981,7 @@ const Game = (() => {
   }
 
   function spawnMegaBossDrones(dt) {
+    if (megaBoss && (megaBoss.profileId === "prisma" || megaBoss.profileId === "orbita")) return;
     bossDroneTimer -= dt;
     if (bossDroneTimer > 0) return;
     bossDroneTimer = 12;
@@ -884,17 +991,17 @@ const Game = (() => {
 
   function updateMegaBossHud() {
     if (!megaBoss || !els.bossHudMega) return;
-    const ws = megaBoss.weakSpots;
-    const left = ws.find((s) => s.id === "left_wing");
-    const right = ws.find((s) => s.id === "right_wing");
-    const top = ws.find((s) => s.id === "top_turret");
+    const ws = megaBoss.weakSpots || [];
     const setFill = (el, cur, max) => {
       if (!el) return;
       el.style.width = `${Math.max(0, Math.min(100, (cur / max) * 100))}%`;
     };
-    if (els.wsLeftFill) setFill(els.wsLeftFill, left && left.alive ? left.hp : 0, left ? left.maxHp : 1);
-    if (els.wsRightFill) setFill(els.wsRightFill, right && right.alive ? right.hp : 0, right ? right.maxHp : 1);
-    if (els.wsTopFill) setFill(els.wsTopFill, top && top.alive ? top.hp : 0, top ? top.maxHp : 1);
+    const fills = [els.wsLeftFill, els.wsTopFill, els.wsRightFill];
+    for (let i = 0; i < fills.length; i++) {
+      const s = ws[i];
+      if (!fills[i]) continue;
+      setFill(fills[i], s && s.alive ? s.hp : 0, s ? s.maxHp : 1);
+    }
     if (els.bossCoreFill)
       els.bossCoreFill.style.width = `${Math.max(0, (megaBoss.coreHp / megaBoss.maxCoreHp) * 100)}%`;
     if (els.bossShieldOverlay)
@@ -903,10 +1010,13 @@ const Game = (() => {
 
   function megaBossPlayerBulletHit(i, b) {
     if (!megaBoss || !megaBoss.alive || bossState !== "FIGHT" || !b.fromPlayer || b.ghost) return false;
+    const vitalRad = (spot) =>
+      typeof megaBoss.vitalHitRadius === "function" ? megaBoss.vitalHitRadius(spot) : (spot.r || 16) + 4;
     for (const spot of megaBoss.weakSpots) {
       if (!spot.alive) continue;
       const pos = megaBoss.getWeakSpotWorldPos(spot);
-      if (dist2(b, { x: pos.x, y: pos.y }) < (b.r + spot.r) * (b.r + spot.r)) {
+      const vr = vitalRad(spot);
+      if (dist2(b, { x: pos.x, y: pos.y }) < (b.r + vr) * (b.r + vr)) {
         bullets.splice(i, 1);
         const dmg = Math.max(1, Math.round(b.dmg || 16));
         spot.hp -= dmg;
@@ -919,17 +1029,16 @@ const Game = (() => {
           AudioFx.explode(2);
           addScore(500, pos.x, pos.y);
         }
-        if (!megaBoss.weakSpots.some((s) => s.alive) && megaBoss.shieldActive) {
-          megaBoss.shieldActive = false;
-          AudioFx.explode(4);
-          rumble(180, 0.5);
-        }
         return true;
       }
     }
-    if (dist2(b, megaBoss) < (b.r + megaBoss.r) * (b.r + megaBoss.r)) {
+    const hullR =
+      typeof megaBoss.bulletHullRadius === "function" ? megaBoss.bulletHullRadius() : megaBoss.r;
+    if (dist2(b, megaBoss) < (b.r + hullR) * (b.r + hullR)) {
       bullets.splice(i, 1);
-      if (megaBoss.shieldActive) {
+      const survivalCore =
+        megaBoss.survivalMode && typeof SurvivalMega !== "undefined" && !SurvivalMega.coreOpen(megaBoss);
+      if (megaBoss.shieldActive || survivalCore) {
         burst(b.x, b.y, "#00f0ff", 5, 220);
         AudioFx.shieldDeflect();
       } else {
@@ -1008,7 +1117,7 @@ const Game = (() => {
       }
     }
 
-    if (likeSurvival()) {
+    if (likeSurvival() && spawningEnabled && !megaEncounterActive()) {
       surgeTimer -= dt;
       if (surgeTimer <= 0) {
         surgeTimer = Math.max(8, 22 - wave * 0.08 - diffTier * 0.15) * (0.75 + Math.random() * 0.5);
@@ -1785,8 +1894,16 @@ const Game = (() => {
         survJitter = 0.88 + Math.random() * 0.28;
       }
     }
-    comboTime -= dt;
-    if (comboTime <= 0) combo = 0;
+    updateCombo(dt);
+
+    if (likeSurvival() && !megaEncounterActive()) {
+      if (input.debugMegaOrbita) announceSurvivalMega("orbita");
+      else if (input.debugMegaPrisma) announceSurvivalMega("prisma");
+      else if (input.debugMegaBoss) {
+        const tid = typeof SurvivalMega !== "undefined" ? SurvivalMega.pickType(SurvivalMega.defeatedCount()) : "titan";
+        announceSurvivalMega(tid);
+      }
+    }
 
     player.update(dt, input, w, h);
     const shot = tryShoot(input);
@@ -1871,13 +1988,26 @@ const Game = (() => {
         : `${mate} · SOBREVIVÊNCIA`;
     } else {
       els.wave.textContent = `ONDA ${wave} · T${diffTier}`;
-      els.objective.textContent = bosses.length
-        ? `BOSS: ${bosses[0].name}`
-        : `PRESSÃO ${(1 + wave * 0.045 + elapsed * 0.0055).toFixed(1)} · + cura · surtos`;
+      if (bossState === "WARN" && typeof SurvivalMega !== "undefined") {
+        const def = SurvivalMega.def(survivalMegaTypeId);
+        els.objective.textContent = `MEGA: ${def.name}`;
+      } else if (megaBoss && megaBoss.survivalMode && bossState === "FIGHT") {
+        const vLeft = SurvivalMega.getVulnerableLeft();
+        const ph = SurvivalMega.getPhase();
+        els.objective.textContent =
+          vLeft > 0
+            ? `NÚCLEO EXPOSTO ${vLeft.toFixed(1)}s · F${ph}`
+            : `FASE ${ph} — destrua os vitals`;
+      } else {
+        els.objective.textContent = bosses.length
+          ? `BOSS: ${bosses[0].name}`
+          : `PRESSÃO ${(1 + wave * 0.045 + elapsed * 0.0055).toFixed(1)} · + cura · surtos`;
+      }
     }
     els.pad.textContent = Input.status();
-    if (megaBoss && megaEncounterActive()) {
+    if (megaBoss && (bossState === "INTRO" || bossState === "FIGHT" || bossState === "OUTRO")) {
       if (els.bossHud) els.bossHud.classList.add("hidden");
+      if (els.bossHudMega) els.bossHudMega.classList.remove("hidden");
       updateMegaBossHud();
     } else if (bosses[0]) {
       if (els.bossHud) els.bossHud.classList.remove("hidden");
