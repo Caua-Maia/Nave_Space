@@ -116,6 +116,12 @@ const Input = (() => {
       keys.has("Escape") || keys.has("KeyP") || !!(pad && pad.start) || !!(touch && touch.pausePressed)
     );
     const confirmPressed = justPressed("ok", keys.has("Enter") || !!(pad && pad.confirm));
+    const shift = keys.has("ShiftLeft") || keys.has("ShiftRight");
+    const alt = keys.has("AltLeft") || keys.has("AltRight");
+    const debugMegaBoss = justPressed("dbgMega", shift && keys.has("F8"));
+    const debugMegaPrisma = justPressed("dbgPrisma", alt && keys.has("F8"));
+    const ctrl = keys.has("ControlLeft") || keys.has("ControlRight");
+    const debugMegaOrbita = justPressed("dbgOrbita", ctrl && keys.has("F8"));
 
     return {
       move,
@@ -125,6 +131,9 @@ const Input = (() => {
       kbShoot,
       pausePressed,
       confirmPressed,
+      debugMegaBoss,
+      debugMegaPrisma,
+      debugMegaOrbita,
       anyKey: keys.size > 0 || mouse.down,
     };
   }

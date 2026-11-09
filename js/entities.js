@@ -301,9 +301,12 @@ function megaBeamDamage(ship, amount) {
 }
 
 class MegaBoss {
-  constructor(x, y) {
+  constructor(x, y, opts) {
+    opts = opts || {};
     this.kindFlag = "mega";
     this.kind = "mega";
+    this.survivalMode = !!opts.survivalMode;
+    this.profileId = opts.profileId || "titan";
     this.name = "TITAN HEXAGONAL";
     this.tier = "boss";
     this.x = x;
@@ -329,10 +332,21 @@ class MegaBoss {
     this.beamAngle = Math.PI / 2;
     this.attackPhase = 0;
     this.introLerp = 0;
+    this.survivalPhase = 1;
+    this.patternScale = 1;
+    this.telegraphScale = 1;
   }
 
   orientRad() {
     return this.angle - Math.PI / 2;
+  }
+
+  bulletHullRadius() {
+    return this.r;
+  }
+
+  vitalHitRadius(spot) {
+    return (spot.r || 16) + 4;
   }
 
   getWeakSpotWorldPos(spot) {
@@ -348,7 +362,11 @@ class MegaBoss {
     if (!this.shieldActive) return;
     const anyAlive = this.weakSpots.some((s) => s.alive);
     if (!anyAlive) {
-      this.shieldActive = false;
+      if (this.survivalMode && typeof SurvivalMega !== "undefined") {
+        SurvivalMega.onAllVitalsDown(this);
+      } else {
+        this.shieldActive = false;
+      }
       AudioFx.explode(4);
     }
   }
@@ -385,34 +403,37 @@ class MegaBoss {
 
     this.patternTimer -= dt;
     if (this.currentPattern === "IDLE") {
-      if (this.patternTimer <= 0) {
+        if (this.patternTimer <= 0) {
         this.patternTimer = 0.4;
+        const tele = (this.telegraphScale || 1) * (0.9 + Math.random() * 0.3);
+        const pace = this.patternScale || 1;
         if (Math.random() < 0.5) {
           this.currentPattern = "BEAM_CHARGE";
-          this.patternTimer = 1.2;
+          this.patternTimer = 1 * tele;
           this.beamAngle = Math.PI / 2;
           this.attackPhase = 0;
         } else {
           this.currentPattern = "BULLET_RING";
           this.patternTimer = 0.01;
         }
+        this._pace = pace;
       }
     } else if (this.currentPattern === "BEAM_CHARGE") {
       if (this.patternTimer <= 0) {
         this.currentPattern = "BEAM_FIRE";
-        this.patternTimer = 0.8;
+        this.patternTimer = 0.85 / (this._pace || 1);
         AudioFx.beamLaser();
       }
     } else if (this.currentPattern === "BEAM_FIRE") {
       if (this.patternTimer <= 0) {
         AudioFx.beamLaserStop();
         this.currentPattern = "IDLE";
-        this.patternTimer = 1.1 + Math.random() * 0.6;
+        this.patternTimer = (1.1 + Math.random() * 0.6) / (this._pace || 1);
       }
     } else if (this.currentPattern === "BULLET_RING") {
       this.fireBulletRing(bullets);
       this.currentPattern = "IDLE";
-      this.patternTimer = 1.4 + Math.random() * 0.5;
+      this.patternTimer = (1.4 + Math.random() * 0.5) / (this._pace || 1);
     }
   }
 
