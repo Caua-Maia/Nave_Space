@@ -3,7 +3,7 @@
 ## Link fixo (GitHub Pages) — recomendado
 
 1. No GitHub: **Settings → Pages → Build and deployment → Source: GitHub Actions**
-2. Cada push na branch **`stage-2`** dispara o workflow *Deploy GitHub Pages (stage-2)*.
+2. Cada push em **`stage-2`** ou **`stage-3`** dispara o workflow *Deploy GitHub Pages*.
 3. Link do jogo: **https://caua-maia.github.io/Nave_Space/**
 
 Compartilhe esse endereço no Chrome ou Edge (desktop). Ranking e save ficam no navegador de cada pessoa.
