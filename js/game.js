@@ -143,9 +143,15 @@ const Game = (() => {
     syncMenuPointer();
   }
 
+  function pilotIdHint(s) {
+    const tag = typeof Save.pilotTag === "function" ? Save.pilotTag(s.pilotId) : "";
+    return tag ? ` · conta #${tag}` : "";
+  }
+
   function refreshTitle() {
     const s = data();
     els.pilotName.value = s.name;
+    const idHint = pilotIdHint(s);
     const sess = s.session;
     if (els.btnLink) els.btnLink.classList.toggle("hidden", s.options.showCoop !== true);
     if (sess) {
@@ -158,11 +164,11 @@ const Game = (() => {
     } else {
       els.btnContinue.classList.add("hidden");
       if (s.story.cleared >= Story.stages.length) {
-        els.storySave.textContent = `${s.name || "Piloto"} · campanha completa · recorde local salvo`;
+        els.storySave.textContent = `${s.name || "Piloto"}${idHint} · campanha completa · recorde local salvo`;
       } else {
         els.storySave.textContent = s.name
-          ? `${s.name} · história na fase ${s.story.nextStage} / ${Story.stages.length} · score campanha ${s.story.campaignScore.toLocaleString("pt-BR")}`
-          : "Digite um nome para gravar ranking e progresso da história.";
+          ? `${s.name}${idHint} · história na fase ${s.story.nextStage} / ${Story.stages.length} · score campanha ${s.story.campaignScore.toLocaleString("pt-BR")}`
+          : `Conta${idHint} criada. Digite um nome para gravar ranking e progresso da história.`;
       }
     }
   }
@@ -364,12 +370,25 @@ const Game = (() => {
     }
   }
 
+  function boardRowKey(row) {
+    const pid = String(row.pilotId || "")
+      .trim()
+      .toLowerCase();
+    if (pid) return "id:" + pid;
+    const name = String(row.name || "ANÔNIMO")
+      .trim()
+      .slice(0, 16)
+      .toLowerCase();
+    return "name:" + name;
+  }
+
   function dedupeLocalBoard(list) {
     const best = new Map();
     (list || []).forEach((row) => {
       const name = String(row.name || "ANÔNIMO").slice(0, 16);
-      const key = name.toLowerCase();
+      const key = boardRowKey(row);
       const entry = {
+        pilotId: row.pilotId || "",
         name,
         score: row.score | 0,
         extra: row.extra || "",
@@ -407,8 +426,10 @@ const Game = (() => {
     rows.forEach((e) => {
       const li = document.createElement("li");
       const ship = shipRankLabel(e.shipId);
+      const tag = e.pilotId && typeof Save.pilotTag === "function" ? Save.pilotTag(e.pilotId) : "";
+      const who = escapeRankText(e.name) + (tag ? " #" + tag : "");
       let t =
-        escapeRankText(e.name) +
+        who +
         " — " +
         e.score.toLocaleString("pt-BR") +
         (e.extra ? " · " + escapeRankText(e.extra) : "") +
@@ -742,6 +763,33 @@ const Game = (() => {
     if (state === "win") return `campaign|${sc}|${n}`;
     if (mode === "story") return `story_over|${stageId}|${sc}|${n}`;
     return `survival|${wave}|${sc}|${n}`;
+  }
+
+  function cloudRankFailText(reason) {
+    if (reason === "plausible" || reason === "cap") {
+      return "Nuvem recusou: pontuação incompatível com esta run.";
+    }
+    if (reason === "rejected") return "Nuvem recusou o envio (validação ou limite).";
+    if (reason === "missing") return "Defina um nome no menu para enviar ao ranking global.";
+    return "Nuvem indisponível — tente de novo depois.";
+  }
+
+  function publishRankEntry(msgEl, kind, entry) {
+    const who = entry.name || "ANÔNIMO";
+    Save.pushBoard(kind, entry);
+    if (typeof Cloud === "undefined") {
+      if (msgEl) msgEl.textContent = `Registro de ${who} salvo neste aparelho.`;
+      return Promise.resolve("local");
+    }
+    if (msgEl) msgEl.textContent = "Salvando no ranking…";
+    return Cloud.pushScore(kind, entry).then((pack) => {
+      const result = pack && typeof pack === "object" ? pack : { ok: !!pack, reason: pack ? "ok" : "network" };
+      const text = result.ok
+        ? `Registro de ${who} salvo local e enviado ao ranking global.`
+        : `Registro de ${who} salvo neste aparelho. ${cloudRankFailText(result.reason)}`;
+      if (msgEl) msgEl.textContent = text;
+      return result.ok ? "cloud" : "local-fallback";
+    });
   }
 
   function gameOver() {
@@ -2433,16 +2481,11 @@ const Game = (() => {
         els.saveMsg.textContent = "Essa combinação (nome e esta run) já foi salva.";
         return;
       }
-      if (mode === "story") {
-        Save.pushBoard("story", { name, score, extra: `fase ${stageId}`, shipId });
-        if (typeof Cloud !== "undefined") Cloud.pushScore("story", { name, score, extra: `fase ${stageId}` });
-      } else {
-        Save.pushBoard("survival", { name, score, extra: `onda ${wave}`, shipId });
-        if (typeof Cloud !== "undefined") Cloud.pushScore("survival", { name, score, extra: `onda ${wave}` });
-      }
+      const kind = mode === "story" ? "story" : "survival";
+      const extra = mode === "story" ? `fase ${stageId}` : `onda ${wave}`;
       scoreSaved = true;
       lastSaveSignature = sig;
-      els.saveMsg.textContent = `Registro de ${name || "ANÔNIMO"} salvo.`;
+      publishRankEntry(els.saveMsg, kind, { name, score, extra, shipId });
     });
     els.btnRetry.addEventListener("click", () => {
       if (mode === "story") startStoryStage(stageId);
@@ -2458,11 +2501,10 @@ const Game = (() => {
         els.winMsg.textContent = "Essa combinação (nome e esta campanha) já foi salva.";
         return;
       }
-      Save.pushBoard("story", { name, score, extra: "campanha" });
-      if (typeof Cloud !== "undefined") Cloud.pushScore("story", { name, score, extra: "campanha" });
       scoreSaved = true;
       lastSaveSignature = sig;
-      els.winMsg.textContent = `Vitória de ${name || "ANÔNIMO"} no ranking.`;
+      const shipId = data().shipId;
+      publishRankEntry(els.winMsg, "story", { name, score, extra: "campanha", shipId });
     });
     els.btnWinMenu.addEventListener("click", goMenu);
     els.pilotName.addEventListener("change", () => commitName(els.pilotName.value));

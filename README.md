@@ -43,7 +43,8 @@ WASD move, mouse mira, clique ou Espaço atira, Esc pausa, Enter inicia.
 - Meteoros que se partem em pedaços menores
 - Inimigos perseguidores e atiradores (depois da onda inicial)
 - Combo / multiplicador de pontuação
-- Vida, i-frames, game over, recorde no `localStorage`
+- Vida, i-frames, game over, save e ranking (`localStorage` + Supabase)
+- Conta por `pilotId` (UUID), nomes iguais diferenciados no top 10 (`Nome #XXXX`)
 - Power-ups: tiro rápido, escudo, triplo
 - Partículas, shake, rumble (se o Chrome permitir)
 - Sons procedurais (Web Audio)
@@ -51,10 +52,15 @@ WASD move, mouse mira, clique ou Espaço atira, Esc pausa, Enter inicia.
 ## O que falta (próximos passos)
 
 - **Arte e música de verdade** — sprites, explosões e trilha (hoje é vetor + beeps)
-- **Chefe por onda** — ainda não há boss
-- **Menu de opções** — volume, inverter Y, rebind de botões
+- **Balanceamento de bosses / campanha** — testes manuais contínuos
 - **Godot / build desktop** — o projeto é HTML5; não há `.exe` nem projeto Godot
 - **DS4Windows** — só se o Chrome não listar o pad (Steam Input / DS4Windows em modo XInput ajuda)
 - **Teste real no seu DualShock 4** — mapeamento extra de eixos 2/5 já está no código, mas precisa validar no hardware
-- **Mobile / toque** — sem virtual sticks
-- **Online / ranking** — recorde é só local
+- **Mobile / toque** — sticks virtuais em evolução (`touch.js`)
+- **Anti-cheat forte** — validação leve na nuvem; competição séria exigiria Edge Function
+
+### Ranking e nuvem
+
+- Local: `space-survivor-save-v2` · Global: Supabase (`js/cloud.js`)
+- Migração SQL (ordem): `docs/supabase-pilot-id.sql` → `supabase-pilot-id-rls-step3.sql` → `supabase-pilot-id-guard-step4.sql`
+- Detalhes: [docs/PILOT-ID-ETAPAS.md](docs/PILOT-ID-ETAPAS.md)

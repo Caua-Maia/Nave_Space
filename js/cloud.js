@@ -18,9 +18,27 @@ const Cloud = (() => {
     return id === "dardo" || id === "bastiao" ? id : "lanca";
   }
 
+  function pilotIdFromSave(data) {
+    return data && data.pilotId ? String(data.pilotId) : "";
+  }
+
+  function boardKey(row) {
+    const pid = String(row.pilot_id || row.pilotId || "")
+      .trim()
+      .toLowerCase();
+    if (pid) return "id:" + pid;
+    const name = String(row.name || "ANÔNIMO")
+      .trim()
+      .slice(0, 16)
+      .toLowerCase();
+    return "name:" + name;
+  }
+
   function pilotBody(data) {
     const story = data.story || {};
+    const id = pilotIdFromSave(data);
     return {
+      id,
       name: String(data.name || "").trim().slice(0, 16),
       ship_id: shipId(data.shipId),
       next_stage: Math.max(1, Math.min(8, story.nextStage | 0 || 1)),
@@ -37,8 +55,8 @@ const Cloud = (() => {
     timer = setTimeout(() => {
       const data = Save.load();
       const body = pilotBody(data);
-      if (!body.name) return;
-      fetch(URL + "/rest/v1/pilots?on_conflict=name", {
+      if (!body.id) return;
+      fetch(URL + "/rest/v1/pilots?on_conflict=id", {
         method: "POST",
         headers: headers({ Prefer: "resolution=merge-duplicates,return=minimal" }),
         body: JSON.stringify(body),
@@ -49,9 +67,9 @@ const Cloud = (() => {
   function pull() {
     if (KEY.indexOf("PENDING") === 0) return Promise.resolve(null);
     const data = Save.load();
-    const name = String(data.name || "").trim();
-    if (!name) return Promise.resolve(null);
-    return fetch(URL + "/rest/v1/pilots?name=eq." + encodeURIComponent(name) + "&select=*", {
+    const pid = pilotIdFromSave(data);
+    if (!pid) return Promise.resolve(null);
+    return fetch(URL + "/rest/v1/pilots?id=eq." + encodeURIComponent(pid) + "&select=*", {
       headers: headers(),
     })
       .then((res) => (res.ok ? res.json() : null))
@@ -83,32 +101,78 @@ const Cloud = (() => {
       .catch(() => null);
   }
 
+  const MAX_CLOUD_SCORE = 500000000;
+
+  function parseIntFromExtra(extra, re) {
+    const m = String(extra || "").match(re);
+    if (!m) return 0;
+    const n = parseInt(m[1], 10);
+    return Number.isFinite(n) && n > 0 ? n : 0;
+  }
+
+  function validateScorePush(kind, entry) {
+    const scoreVal = Math.max(0, entry.score | 0);
+    const extra = String(entry.extra || "").trim();
+    if (scoreVal > MAX_CLOUD_SCORE) return { ok: false, reason: "cap" };
+    if (kind === "survival") {
+      const wave = parseIntFromExtra(extra, /onda\s*(\d+)/i);
+      if (wave > 0) {
+        const cap = Math.max(800000, wave * 12000000);
+        if (scoreVal > cap) return { ok: false, reason: "plausible" };
+      }
+    }
+    if (kind === "story") {
+      const low = extra.toLowerCase();
+      if (low.indexOf("fase") === 0) {
+        const stage = parseIntFromExtra(extra, /fase\s*(\d+)/i);
+        if (stage > 0) {
+          const cap = Math.max(2000000, stage * 15000000);
+          if (scoreVal > cap) return { ok: false, reason: "plausible" };
+        }
+      } else if (low === "campanha" && scoreVal > 400000000) {
+        return { ok: false, reason: "plausible" };
+      }
+    }
+    return { ok: true, reason: "ok" };
+  }
+
   function pushScore(kind, entry) {
-    if (KEY.indexOf("PENDING") === 0) return Promise.resolve(false);
+    if (KEY.indexOf("PENDING") === 0) return Promise.resolve({ ok: false, reason: "network" });
     const data = Save.load();
+    const pilot_id = pilotIdFromSave(data);
     const name = String(entry.name || data.name || "").trim().slice(0, 16);
-    if (!name) return Promise.resolve(false);
+    if (!pilot_id || !name) return Promise.resolve({ ok: false, reason: "missing" });
+    const check = validateScorePush(kind, entry);
+    if (!check.ok) return Promise.resolve(check);
+    const ship = shipId(entry.shipId || data.shipId);
+    const scoreVal = Math.max(0, entry.score | 0);
     return fetch(URL + "/rest/v1/scores", {
       method: "POST",
       headers: headers({ Prefer: "return=minimal" }),
       body: JSON.stringify({
         mode: kind === "story" ? "story" : "survival",
+        pilot_id,
         name,
-        score: Math.max(0, entry.score | 0),
+        score: scoreVal,
         extra: String(entry.extra || "").slice(0, 40),
-        ship_id: shipId(data.shipId),
+        ship_id: ship,
       }),
     })
-      .then((res) => res.ok)
-      .catch(() => false);
+      .then((res) => {
+        if (res.ok) return { ok: true, reason: "ok" };
+        if (res.status === 400 || res.status === 409 || res.status === 422) return { ok: false, reason: "rejected" };
+        return { ok: false, reason: "network" };
+      })
+      .catch(() => ({ ok: false, reason: "network" }));
   }
 
   function dedupeScores(rows) {
     const best = new Map();
     (rows || []).forEach((row) => {
       const name = String(row.name || "ANÔNIMO").slice(0, 16);
-      const key = name.toLowerCase();
+      const key = boardKey(row);
       const entry = {
+        pilotId: row.pilot_id || "",
         name,
         score: row.score | 0,
         extra: row.extra || "",
@@ -126,7 +190,7 @@ const Cloud = (() => {
     const query =
       "/rest/v1/scores?mode=eq." +
       mode +
-      "&select=name,score,extra,ship_id&order=score.desc&limit=40";
+      "&select=pilot_id,name,score,extra,ship_id&order=score.desc&limit=40";
     return fetch(URL + query, { headers: headers() })
       .then((res) => {
         if (!res.ok) return { ok: false, rows: [] };

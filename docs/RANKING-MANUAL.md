@@ -2,6 +2,8 @@
 
 O ranking **local** fica em `localStorage`, chave `space-survivor-save-v2`, nos arrays `survivalBoard` e `storyBoard`.
 
+Cada save tem `pilotId` (UUID). No top 10 o jogo deduplica por **conta**, não só por nome. Use o mesmo `pilotId` do save na entrada manual para não colidir com outro piloto de mesmo nome.
+
 ## Sobrevivência (ex.: nome + 148373020, onda 56)
 
 Abra o jogo no **mesmo domínio** onde a jogadora joga (ex.: GitHub Pages), pressione **F12** → **Console** e cole (ajuste nome, score, onda e `shipId` se precisar):
@@ -16,6 +18,7 @@ Abra o jogo no **mesmo domínio** onde a jogadora joga (ex.: GitHub Pages), pres
   }
   const data = JSON.parse(raw);
   const entry = {
+    pilotId: data.pilotId,
     name: "chorapenga".trim().slice(0, 16),
     score: 148373020,
     extra: "onda 56",
@@ -35,4 +38,4 @@ Depois **recarregue** a página (ideal **Ctrl+F5**).
 
 ## Ranking global (nuvem)
 
-`Cloud.pushScore` envia para o Supabase; não dá para reproduzir só com `localStorage`. Use o painel do Supabase (tabela `scores`) ou uma versão do jogo com o mesmo código de `Cloud.pushScore`, se tiver acesso ao backend.
+`Cloud.pushScore` envia para o Supabase com `pilot_id` + nome. Limites de plausibilidade e rate limit aplicam na nuvem (ver `docs/PILOT-ID-ETAPAS.md`). Inserção manual: tabela `scores` no painel Supabase, preencher `pilot_id` se quiser associar à conta correta.
