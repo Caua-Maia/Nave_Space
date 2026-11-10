@@ -10,6 +10,7 @@ const EasterEggStars = (() => {
     STAR_COLOR: "#ff69b4",
     STAR_COLOR_ALT: "#da70d6",
     BUFF_DURATION: 10000,
+    EVENT_MS: 180000,
     STAR_RADIUS: 7,
     COLLECT_DIST_PAD: 5,
     STEALTH_DRIFT: true,
@@ -31,6 +32,8 @@ const EasterEggStars = (() => {
   let celebrationT = 0;
   let starfieldSlowT = 0;
   let buffT = 0;
+  let isEmillyBuffActive = false;
+  let emillyBuffTimer = 0;
   let glowT = 0;
   let playerRef = null;
   const easterEggParticles = [];
@@ -48,6 +51,8 @@ const EasterEggStars = (() => {
     celebrationT = 0;
     starfieldSlowT = 0;
     buffT = 0;
+    isEmillyBuffActive = false;
+    emillyBuffTimer = 0;
     glowT = 0;
     playerRef = null;
     easterEggParticles.length = 0;
@@ -108,6 +113,8 @@ const EasterEggStars = (() => {
     celebrationT = CONFIG.CELEBRATION_SEC;
     starfieldSlowT = CONFIG.STARFIELD_SLOW_SEC;
     buffT = CONFIG.BUFF_DURATION / 1000;
+    isEmillyBuffActive = true;
+    emillyBuffTimer = CONFIG.EVENT_MS;
     const p = ctx.player;
     playerRef = p;
     if (p) {
@@ -148,6 +155,14 @@ const EasterEggStars = (() => {
       }
     } else if (ctx.player) {
       ctx.player.starBlessing = 0;
+    }
+
+    if (isEmillyBuffActive) {
+      emillyBuffTimer -= dt * 1000;
+      if (emillyBuffTimer <= 0) {
+        emillyBuffTimer = 0;
+        isEmillyBuffActive = false;
+      }
     }
 
     if (celebrationT > 0) celebrationT -= dt;
@@ -344,7 +359,11 @@ const EasterEggStars = (() => {
   }
 
   function objectiveOverride() {
-    return null;
+    if (!isEmillyBuffActive) return null;
+    const sec = Math.max(0, Math.ceil(emillyBuffTimer / 1000));
+    const m = Math.floor(sec / 60);
+    const s = String(sec % 60).padStart(2, "0");
+    return `EMILLY · combo travado · ${m}:${s}`;
   }
 
   return {
@@ -357,5 +376,11 @@ const EasterEggStars = (() => {
     drawCollectibles,
     drawCelebration,
     objectiveOverride,
+    isEmillyBuffActive() {
+      return isEmillyBuffActive;
+    },
+    emillyBuffTimer() {
+      return emillyBuffTimer;
+    },
   };
 })();

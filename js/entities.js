@@ -64,6 +64,45 @@ class Particle {
   }
 }
 
+class HeartProjectile {
+  constructor(x, y, angle, speed) {
+    this.x = x;
+    this.y = y;
+    this.vx = Math.cos(angle) * speed;
+    this.vy = Math.sin(angle) * speed;
+    this.life = rand(2.2, 3.1);
+    this.rot = rand(0, TAU);
+    this.spin = rand(-1.4, 1.4);
+    this.scale = rand(1.7, 2.5);
+    this.harmless = true;
+  }
+  update(dt) {
+    this.life -= dt;
+    this.x += this.vx * dt;
+    this.y += this.vy * dt;
+    this.rot += this.spin * dt;
+  }
+  draw(ctx) {
+    ctx.save();
+    ctx.translate(this.x, this.y);
+    ctx.rotate(this.rot);
+    ctx.scale(this.scale, this.scale);
+    ctx.globalAlpha = Math.max(0.25, Math.min(1, this.life));
+    ctx.beginPath();
+    ctx.moveTo(0, 2.15);
+    ctx.bezierCurveTo(0, 1.15, -2.35, 0.15, -2.35, -1.15);
+    ctx.bezierCurveTo(-2.35, -2.55, -0.65, -3.05, 0, -1.75);
+    ctx.bezierCurveTo(0.65, -3.05, 2.35, -2.55, 2.35, -1.15);
+    ctx.bezierCurveTo(2.35, 0.15, 0, 1.15, 0, 2.15);
+    ctx.closePath();
+    ctx.fillStyle = "#FF69B4";
+    ctx.shadowColor = "#ff69b4";
+    ctx.shadowBlur = 8;
+    ctx.fill();
+    ctx.restore();
+  }
+}
+
 class Bullet {
   constructor(x, y, angle, speed, fromPlayer, color, dmg = 16) {
     this.reset(x, y, angle, speed, fromPlayer, color, dmg);
@@ -82,10 +121,18 @@ class Bullet {
     this.ghost = false;
     this.shipId = undefined;
     this.pierce = 0;
+    this.lancaFromShip = false;
+    this.lancaDuplicated = false;
+    this.lancaHomingLeft = 0;
+    this.lancaHomingNid = 0;
+    this.lancaIgnoreT = 0;
+    this.lancaIgnoreNid = 0;
+    this.lancaSpeed = 0;
     this._pooled = false;
     return this;
   }
   update(dt, w, h) {
+    if (this.lancaIgnoreT > 0) this.lancaIgnoreT -= dt;
     this.life -= dt;
     this.x += this.vx * dt;
     this.y += this.vy * dt;
@@ -93,15 +140,19 @@ class Bullet {
   }
   draw(ctx) {
     ctx.save();
-    ctx.fillStyle = this.color;
-    ctx.shadowColor = this.color;
-    ctx.shadowBlur = 10;
+    const chain = this.lancaDuplicated;
+    ctx.fillStyle = chain ? "#b8ffff" : this.color;
+    ctx.shadowColor = chain ? "#4de8ff" : this.color;
+    ctx.shadowBlur = chain ? 14 : 10;
+    const rr = chain ? this.r * 0.95 : this.r;
     ctx.beginPath();
-    ctx.arc(this.x, this.y, this.r, 0, TAU);
+    ctx.arc(this.x, this.y, rr, 0, TAU);
     ctx.fill();
     ctx.restore();
   }
 }
+
+const LANCA_CHAIN_HOMING_SEC = 1.55;
 
 const ParticlePool = (() => {
   const free = [];
@@ -519,7 +570,32 @@ class Enemy {
     if (radius) b.r = radius;
     bullets.push(b);
   }
-  update(dt, w, h, player, bullets) {
+  shootHeart(hearts, angle, speed) {
+    if (!hearts || hearts.length > 96) return;
+    hearts.push(new HeartProjectile(this.x, this.y, angle + rand(-0.18, 0.18), speed));
+  }
+  cruiseLove(dt, w, h, hearts) {
+    if (this.loveAng == null) {
+      this.loveAng = this.x < w * 0.5 ? 0 : Math.PI;
+      this.loveAng += rand(-0.28, 0.28);
+      this.speed = rand(78, 128);
+      this.cool = rand(0.15, 0.7);
+    }
+    this.angle = this.loveAng;
+    this.x += Math.cos(this.loveAng) * this.speed * dt;
+    this.y += Math.sin(this.loveAng) * this.speed * dt;
+    this.cool -= dt;
+    if (this.cool <= 0) {
+      this.cool = rand(0.55, 1.15);
+      this.shootHeart(hearts, this.loveAng + Math.PI * 0.5 * (Math.random() < 0.5 ? 1 : -1), rand(70, 140));
+    }
+    wrap(this, w, h, this.r);
+  }
+  update(dt, w, h, player, bullets, hearts) {
+    if (hearts) {
+      this.cruiseLove(dt, w, h, hearts);
+      return;
+    }
     const dx = player.x - this.x;
     const dy = player.y - this.y;
     const d = Math.hypot(dx, dy) || 1;
@@ -655,7 +731,7 @@ const SHIP_PERKS = {
     scoreVitalMul: 1.15,
     scoreBossMul: 1.12,
     scoreFarmMul: 1.06,
-    pierceRocks: 1,
+    pierceRocks: 3,
     rapidGapScale: 0.42,
   },
   bastiao: {
@@ -689,11 +765,38 @@ function megaBulletDamage(bullet) {
   return Math.max(1, Math.round(raw * mul));
 }
 
+/** Ângulos locais (relativos à mira) para disparo no buff T — espelha o desenho vetorial. */
+const SHIP_VERTEX_SHOT_ANGLES = {
+  bastiao: (() => {
+    const a = [];
+    for (let i = 0; i < 6; i++) a.push((i / 6) * TAU);
+    return a;
+  })(),
+  lanca: [0, Math.atan2(0.75, -0.85), Math.PI, Math.atan2(-0.75, -0.85)],
+  dardo: [0, Math.PI / 2, Math.PI, -Math.PI / 2],
+};
+
+function shotAnglesDardoMulti(aim) {
+  return SHIP_VERTEX_SHOT_ANGLES.dardo.map((la) => aim + la);
+}
+
+function shotAnglesLancaMulti(aim) {
+  const tight = 0.035;
+  const out = [aim - tight, aim, aim + tight];
+  SHIP_VERTEX_SHOT_ANGLES.lanca.forEach((la) => out.push(aim + la));
+  return out;
+}
+
+function shotAnglesBastiaoMulti(aim) {
+  const verts = SHIP_VERTEX_SHOT_ANGLES.bastiao.map((la) => aim + la);
+  return [aim, aim].concat(verts);
+}
+
 const SHIP_ROSTER = [
   {
     id: "lanca",
     name: "Lança",
-    blurb: "Score alto em onda longa. Combo mais folgado, perfura 1 rocha e T em rajada na mira. Melhor nos mega-bosses.",
+    blurb: "Tiro único que duplica ao acertar inimigo e persegue o próximo 1,2s. Perfura 1 rocha. T: rajada + vértices.",
     hp: 105,
     speed: 350,
     acc: 1000,
@@ -708,7 +811,7 @@ const SHIP_ROSTER = [
   {
     id: "dardo",
     name: "Dardo",
-    blurb: "Rápida e frágil. Com o T, dispara para frente e para trás ao mesmo tempo.",
+    blurb: "Rápida e frágil. Rei do farm. Com o T, dispara 1 tiro em cada vértice do losango.",
     hp: 78,
     speed: 480,
     acc: 1500,
@@ -723,14 +826,14 @@ const SHIP_ROSTER = [
   {
     id: "bastiao",
     name: "Bastião",
-    blurb: "Run estável: menos dano recebido, T em salva larga e pontos por tempo vivo. Dois canhões laterais no dia a dia.",
+    blurb: "Dois tiros retos. Com T: 2 à frente + 1 tiro por vértice do hexágono.",
     hp: 150,
     speed: 250,
     acc: 720,
     r: 18,
     gap: 0.18,
     shots: 2,
-    spread: 0.28,
+    spread: 0,
     bulletSpeed: 520,
     bulletDmg: 22,
     color: "#6ab4ff",
