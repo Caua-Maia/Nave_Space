@@ -1,8 +1,8 @@
-name: Deploy GitHub Pages (stage-2)
+name: Deploy GitHub Pages
 
 on:
   push:
-    branches: [stage-2]
+    branches: [stage-2, stage-3]
   workflow_dispatch:
 
 permissions:
