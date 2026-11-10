@@ -1,6 +1,9 @@
 window.addEventListener("load", () => {
   try {
-    Game.init();
+    if (!window.SpaceSurvivor || typeof window.SpaceSurvivor.start !== "function") {
+      throw new Error("SpaceSurvivor.start indisponível");
+    }
+    window.SpaceSurvivor.start();
   } catch (err) {
     console.error(err);
     alert(

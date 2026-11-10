@@ -658,6 +658,45 @@ body[data-platform="desktop"] #btn-ranks-back:active {
   filter: brightness(1.08);
 }
 
+#btn-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45em;
+}
+
+#btn-link.coop-locked {
+  cursor: not-allowed;
+  filter: none;
+  background: rgba(77, 232, 255, 0.12);
+  color: rgba(77, 232, 255, 0.55);
+  border: 1px solid rgba(77, 232, 255, 0.25);
+}
+
+#btn-link.coop-locked .btn-link-lock::before {
+  content: "";
+  display: inline-block;
+  width: 0.95em;
+  height: 1.05em;
+  vertical-align: -0.15em;
+  background: currentColor;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='black' d='M17 9h-1V7a4 4 0 1 0-8 0v2H7a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V11a2 2 0 0 0-2-2m-3 0H10V7a2 2 0 1 1 4 0Z'/%3E%3C/svg%3E")
+    center / contain no-repeat;
+}
+
+#btn-link:not(.coop-locked) .btn-link-lock {
+  display: none;
+}
+
+.hud-stat-combo.combo-decay {
+  color: #ff9a88;
+  transition: color 0.15s ease;
+}
+
+.hud-stat-combo.combo-decay .label {
+  opacity: 0.85;
+}
+
 .objective-preview {
   color: var(--amber);
   margin-bottom: 22px;

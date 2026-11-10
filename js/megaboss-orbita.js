@@ -18,7 +18,7 @@ class OrbitaMega {
     this.startRadius = 0;
     this.ringRadius = 0;
     this.r = 36;
-    this.vitalHitPad = 11;
+    this.vitalHitPad = 15;
     this.coreHp = 500;
     this.maxCoreHp = 500;
     this.shieldActive = true;
@@ -183,7 +183,7 @@ class OrbitaMega {
     this.salvoTimer -= dt;
     if (this.salvoTimer <= 0 && alive > 0) {
       this.salvoTimer = (5.8 + Math.random() * 1.4) / pace;
-      this.fireCenterSalvo(bullets);
+      this.fireCenterSalvo(bullets, player);
     }
     this.spiralTimer -= dt;
     if (this.spiralTimer <= 0 && alive >= 3) {
@@ -217,15 +217,23 @@ class OrbitaMega {
     }
   }
 
-  fireCenterSalvo(bullets) {
+  fireCenterSalvo(bullets, player) {
     const total = 24;
     const g1 = (Math.random() * total) | 0;
     const g2 = (g1 + 2) % total;
     const g3 = (g1 + 11) % total;
+    const pace = this._pace || 1;
     for (let i = 0; i < total; i++) {
       if (i === g1 || i === g2 || i === g3) continue;
       const a = (i / total) * TAU + this.ringSpin * 0.4;
-      spawnPooledBullet(bullets, this.x, this.y, a, 175 * this._pace, false, "#ff66bb", 15);
+      spawnPooledBullet(bullets, this.x, this.y, a, 175 * pace, false, "#ff66bb", 15);
+    }
+    if (player && player.hp > 0) {
+      const spd = 212 * pace;
+      const aim = bossLeadAngle(this.x, this.y, player, spd, 1.1);
+      for (let k = -1; k <= 1; k++) {
+        spawnPooledBullet(bullets, this.x, this.y, aim + k * 0.14, spd, false, "#ffb347", 14);
+      }
     }
     AudioFx.bossShootRing();
   }
@@ -235,9 +243,10 @@ class OrbitaMega {
     for (const spot of this.weakSpots) {
       if (!spot.alive) continue;
       const pos = this.getWeakSpotWorldPos(spot);
-      const toP = Math.atan2(player.y - pos.y, player.x - pos.x);
+      const spd = 218 * (this._pace || 1);
+      const toP = bossLeadAngle(pos.x, pos.y, player, spd, 1.05);
       const along = spot.baseAngle + this.ringSpin * 0.35;
-      spawnPooledBullet(bullets, pos.x, pos.y, toP, 210 * this._pace, false, "#ff4d9a", 14);
+      spawnPooledBullet(bullets, pos.x, pos.y, toP, spd, false, "#ff4d9a", 14);
       spawnPooledBullet(bullets, pos.x, pos.y, along + Math.PI / 2, 165, false, "#ffb347", 12);
       if (++fired >= 4) break;
     }
@@ -246,12 +255,12 @@ class OrbitaMega {
 
   fireNodePattern(spot, bullets, player, isFollowUp) {
     const pos = this.getWeakSpotWorldPos(spot);
-    const aim = Math.atan2(player.y - pos.y, player.x - pos.x);
     const pace = this._pace || 1;
     const ph = this.survivalPhase || 1;
     const n = isFollowUp ? 3 : ph >= 3 ? 7 : ph >= 2 ? 5 : 4;
     const spread = ph >= 3 ? 0.32 : 0.22;
-  const speed = (isFollowUp ? 240 : 215) * pace;
+    const speed = (isFollowUp ? 240 : 215) * pace;
+    const aim = bossLeadAngle(pos.x, pos.y, player, speed, isFollowUp ? 0.95 : 1.1);
     for (let i = 0; i < n; i++) {
       const a = aim + (i - (n - 1) / 2) * spread;
       spawnPooledBullet(bullets, pos.x, pos.y, a, speed, false, isFollowUp ? "#ffb347" : "#ff4d9a", isFollowUp ? 15 : 14);

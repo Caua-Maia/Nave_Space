@@ -2,6 +2,9 @@ const Cloud = (() => {
   const URL = "https://sncenrdjoxbbzvlxyrcj.supabase.co";
   const KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNuY2VucmRqb3hiYnp2bHh5cmNqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTE5NDQ4NjEsImV4cCI6MjEwNzUyMDg2MX0.K1sYHW0yhqemlCnf_QcmjIlWSiN9bTCRVT6WfCMLuqQ";
   let timer = 0;
+  let coopOnline = null;
+  let coopProbeInterval = 0;
+  let coopListener = null;
 
   function headers(extra) {
     return Object.assign(
@@ -146,24 +149,37 @@ const Cloud = (() => {
     if (!check.ok) return Promise.resolve(check);
     const ship = shipId(entry.shipId || data.shipId);
     const scoreVal = Math.max(0, entry.score | 0);
-    return fetch(URL + "/rest/v1/scores", {
-      method: "POST",
-      headers: headers({ Prefer: "return=minimal" }),
-      body: JSON.stringify({
-        mode: kind === "story" ? "story" : "survival",
-        pilot_id,
-        name,
-        score: scoreVal,
-        extra: String(entry.extra || "").slice(0, 40),
-        ship_id: ship,
-      }),
-    })
-      .then((res) => {
-        if (res.ok) return { ok: true, reason: "ok" };
-        if (res.status === 400 || res.status === 409 || res.status === 422) return { ok: false, reason: "rejected" };
-        return { ok: false, reason: "network" };
+    const mode = kind === "story" ? "story" : "survival";
+    const playSeconds = Math.max(
+      0,
+      Math.floor(Number(entry.playSeconds != null ? entry.playSeconds : entry.play_seconds) || 0)
+    );
+    if (typeof ScoreIntegrity === "undefined") {
+      return Promise.resolve({ ok: false, reason: "integrity" });
+    }
+    return ScoreIntegrity.token(mode, scoreVal, playSeconds, pilot_id).then((integrity_token) => {
+      if (!integrity_token) return { ok: false, reason: "integrity" };
+      return fetch(URL + "/rest/v1/scores", {
+        method: "POST",
+        headers: headers({ Prefer: "return=minimal" }),
+        body: JSON.stringify({
+          mode,
+          pilot_id,
+          name,
+          score: scoreVal,
+          extra: String(entry.extra || "").slice(0, 40),
+          ship_id: ship,
+          play_seconds: playSeconds,
+          integrity_token,
+        }),
       })
-      .catch(() => ({ ok: false, reason: "network" }));
+        .then((res) => {
+          if (res.ok) return { ok: true, reason: "ok" };
+          if (res.status === 400 || res.status === 409 || res.status === 422) return { ok: false, reason: "rejected" };
+          return { ok: false, reason: "network" };
+        })
+        .catch(() => ({ ok: false, reason: "network" }));
+    });
   }
 
   function dedupeScores(rows) {
@@ -213,5 +229,98 @@ const Cloud = (() => {
     }));
   }
 
-  return { sync, pull, pushScore, boards, url: () => URL, key: () => KEY };
+  function probeCoopServer() {
+    if (KEY.indexOf("PENDING") === 0) {
+      coopOnline = false;
+      return Promise.resolve(false);
+    }
+    return fetch(URL + "/rest/v1/scores?select=id&limit=1", {
+      method: "GET",
+      headers: headers(),
+    })
+      .then((res) => {
+        const ok = res.ok;
+        coopOnline = ok;
+        return ok;
+      })
+      .catch(() => {
+        coopOnline = false;
+        return false;
+      });
+  }
+
+  function probeRealtime() {
+    if (KEY.indexOf("PENDING") === 0) {
+      coopOnline = false;
+      return Promise.resolve(false);
+    }
+    return new Promise((resolve) => {
+      let finished = false;
+      const done = (ok) => {
+        if (finished) return;
+        finished = true;
+        coopOnline = ok;
+        resolve(ok);
+      };
+      let ws;
+      try {
+        const wsUrl =
+          URL.replace("https://", "wss://") +
+          "/realtime/v1/websocket?apikey=" +
+          encodeURIComponent(KEY) +
+          "&vsn=1.0.0";
+        ws = new WebSocket(wsUrl);
+      } catch (err) {
+        done(false);
+        return;
+      }
+      const timeout = setTimeout(() => {
+        try {
+          ws.close();
+        } catch (e) {}
+        done(false);
+      }, 5500);
+      ws.onopen = () => {
+        clearTimeout(timeout);
+        try {
+          ws.close();
+        } catch (e) {}
+        done(true);
+      };
+      ws.onerror = () => {
+        clearTimeout(timeout);
+        done(false);
+      };
+    });
+  }
+
+  function coopReady() {
+    return coopOnline;
+  }
+
+  function watchCoop(onChange) {
+    coopListener = typeof onChange === "function" ? onChange : null;
+    const run = () =>
+      probeRealtime().then((ok) => {
+        if (coopListener) coopListener(ok);
+        return ok;
+      });
+    clearInterval(coopProbeInterval);
+    coopProbeInterval = 0;
+    run();
+    coopProbeInterval = setInterval(run, 45000);
+  }
+
+  return {
+    sync,
+    pull,
+    pushScore,
+    boards,
+    url: () => URL,
+    key: () => KEY,
+    probeCoopServer,
+    probeRealtime,
+    coopReady,
+    watchCoop,
+  };
 })();

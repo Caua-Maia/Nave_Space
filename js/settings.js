@@ -164,7 +164,10 @@ const Settings = (() => {
   }
 
   function finishEdit() {
-    if (draft) Save.setOptions(draft);
+    if (draft) {
+      draft.layoutCustom = true;
+      Save.setOptions(draft);
+    }
     editing = false;
     draft = null;
     document.body.classList.remove("hud-edit");

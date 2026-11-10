@@ -17,7 +17,7 @@ class PrismaMega {
     this.spin = 0;
     this.triRadius = 92;
     this.r = this.triRadius + 24;
-    this.vitalHitPad = 12;
+    this.vitalHitPad = 16;
     this.coreHp = 520;
     this.maxCoreHp = 520;
     this.shieldActive = true;
@@ -133,7 +133,7 @@ class PrismaMega {
     return out;
   }
 
-  pickNextSweep() {
+  pickNextSweep(player) {
     const live = this.aliveCannons();
     if (!live.length) return;
     this.sweepCanon = live[(Math.random() * live.length) | 0];
@@ -141,8 +141,13 @@ class PrismaMega {
     this.sweepOrigin = this.getWeakSpotWorldPos(spot);
     const localA = this.spin + spot.cannonAngle;
     const spread = 0.72 / (this.patternScale || 1);
-    this.sweepStart = localA - spread * 0.5;
-    this.sweepEnd = localA + spread * 0.5;
+    let mid = localA;
+    if (player && player.hp > 0) {
+      const p = this.sweepOrigin;
+      mid = bossLeadAngle(p.x, p.y, player, 0, 0.65);
+    }
+    this.sweepStart = mid - spread * 0.5;
+    this.sweepEnd = mid + spread * 0.5;
     this.sweepPos = 0;
   }
 
@@ -175,7 +180,7 @@ class PrismaMega {
           this.patternTimer = 0.35;
           return;
         }
-        this.pickNextSweep();
+        this.pickNextSweep(player);
         this.currentPattern = "SWEEP_CHARGE";
         this.patternTimer = 1 * tele;
       }
@@ -194,20 +199,21 @@ class PrismaMega {
         this.currentPattern = "IDLE";
         this.patternTimer = (1.05 + Math.random() * 0.45) / pace;
         if (this.survivalPhase >= 2 && Math.random() < 0.35) {
-          this.fireVitalVolley(bullets);
+          this.fireVitalVolley(bullets, player);
         }
       }
     }
   }
 
-  fireVitalVolley(bullets) {
+  fireVitalVolley(bullets, target) {
     for (const spot of this.weakSpots) {
       if (!spot.alive) continue;
       const p = this.getWeakSpotWorldPos(spot);
-      const a = this.spin + spot.cannonAngle;
+      const spd = 248 * (this._pace || 1);
+      const base = target ? bossLeadAngle(p.x, p.y, target, spd, 1.05) : this.spin + spot.cannonAngle;
       for (let k = -1; k <= 1; k++) {
-        const ang = a + k * 0.22;
-        spawnPooledBullet(bullets, p.x, p.y, ang, 240, false, "#ffb347", 12);
+        const ang = base + k * 0.2;
+        spawnPooledBullet(bullets, p.x, p.y, ang, spd, false, "#ffb347", 12);
       }
     }
     AudioFx.bossShootRing();

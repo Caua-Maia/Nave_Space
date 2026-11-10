@@ -1,4 +1,6 @@
-const Game = (() => {
+(function () {
+  "use strict";
+  const Game = (() => {
   let canvas, ctx, w, h;
   let state = "menu";
   let last = 0;
@@ -54,6 +56,12 @@ const Game = (() => {
   let survivalMegaTypeId = "titan";
   let comboGraceLeft = 0;
   let comboWasLocked = false;
+  let comboSinceHit = 0;
+  let hitStopLeft = 0;
+  const COMBO_IDLE_GRACE = 3;
+  const COMBO_DECAY_MUL = 5.5;
+  const HIT_STOP_BOSS_MS = 0.048;
+  const HIT_STOP_BIG_MS = 0.043;
   let spawningEnabled = true;
   let emillyWasOn = false;
   let worldSeq = 1;
@@ -99,6 +107,29 @@ const Game = (() => {
     const b = bullets[i];
     if (b && typeof BulletPool !== "undefined") BulletPool.release(b);
     bullets.splice(i, 1);
+  }
+
+  function drainBullets(list) {
+    if (!list || !list.length) return;
+    for (let i = 0; i < list.length; i++) {
+      if (typeof BulletPool !== "undefined") BulletPool.release(list[i]);
+    }
+    list.length = 0;
+  }
+
+  function drainEnemies(list) {
+    if (!list || !list.length) return;
+    for (let i = 0; i < list.length; i++) {
+      if (typeof EnemyPool !== "undefined") EnemyPool.release(list[i]);
+    }
+    list.length = 0;
+  }
+
+  function releaseEnemyAt(i) {
+    if (i < 0 || i >= enemies.length) return;
+    const en = enemies[i];
+    if (en && typeof EnemyPool !== "undefined") EnemyPool.release(en);
+    enemies.splice(i, 1);
   }
 
   function pruneLive(list, keep, release) {
@@ -150,18 +181,56 @@ const Game = (() => {
     return tag ? ` · conta #${tag}` : "";
   }
 
+  function purgeSurvivalSession() {
+    const sess = data().session;
+    if (sess && sess.mode === "survival") Save.clearSession();
+  }
+
+  function syncCoopButton() {
+    if (!els.btnLink) return;
+    const show = data().options.showCoop === true;
+    els.btnLink.classList.toggle("hidden", !show);
+    if (!show) return;
+    const label = document.getElementById("btn-link-label");
+    const online = typeof Cloud !== "undefined" ? Cloud.coopReady() : false;
+    const checking = typeof Cloud !== "undefined" && Cloud.coopReady() === null;
+    if (checking) {
+      els.btnLink.disabled = true;
+      els.btnLink.classList.remove("coop-locked");
+      if (label) label.textContent = "DOIS PILOTOS";
+      return;
+    }
+    if (!online) {
+      els.btnLink.disabled = true;
+      els.btnLink.classList.add("coop-locked");
+      if (label) label.textContent = "SERVIDOR INDISPONÍVEL";
+    } else {
+      els.btnLink.disabled = false;
+      els.btnLink.classList.remove("coop-locked");
+      if (label) label.textContent = "DOIS PILOTOS";
+    }
+  }
+
+  function syncPauseSave() {
+    if (!els.btnPauseSave) return;
+    const canSave = mode === "story";
+    els.btnPauseSave.classList.toggle("hidden", !canSave);
+    els.btnPauseSave.disabled = !canSave;
+  }
+
   function refreshTitle() {
     const s = data();
     els.pilotName.value = s.name;
     const idHint = pilotIdHint(s);
-    const sess = s.session;
-    if (els.btnLink) els.btnLink.classList.toggle("hidden", s.options.showCoop !== true);
-    if (sess) {
+    let sess = s.session;
+    if (sess && sess.mode === "survival") {
+      Save.clearSession();
+      sess = null;
+    }
+    syncCoopButton();
+    if (sess && sess.mode === "story") {
       els.btnContinue.classList.remove("hidden");
-      const extra =
-        sess.mode === "story"
-          ? `fase ${sess.stageId} · ${formatTime(sess.elapsed)}`
-          : `onda ${sess.wave} · score ${sess.score.toLocaleString("pt-BR")}`;
+      const extra = `fase ${sess.stageId} · ${formatTime(sess.elapsed)}`;
       els.storySave.textContent = `Partida salva (${extra}). CONTINUAR retoma de onde parou.`;
     } else {
       els.btnContinue.classList.add("hidden");
@@ -268,6 +337,8 @@ const Game = (() => {
   }
 
   function applySessionSnapshot(s) {
+    drainBullets(bullets);
+    drainEnemies(enemies);
     mode = s.mode;
     stageId = s.stageId;
     score = s.score;
@@ -307,7 +378,7 @@ const Game = (() => {
       return a;
     });
     enemies = s.enemies.map((e) => {
-      const en = new Enemy(ux(e.x), uy(e.y), e.type, e.scale || 1);
+      const en = spawnPooledEnemy(null, ux(e.x), uy(e.y), e.type, e.scale || 1);
       en.hp = e.hp;
       en.angle = e.angle;
       en.cool = e.cool;
@@ -339,7 +410,7 @@ const Game = (() => {
   }
 
   function saveRunSession() {
-    if (mode === "link") return false;
+    if (mode === "link" || mode === "survival") return false;
     if (state !== "play" && state !== "pause") return false;
     commitName(els.pilotName.value || data().name);
     Save.saveSession(buildSessionSnapshot());
@@ -526,6 +597,10 @@ const Game = (() => {
     }
   }
 
+  function bumpHitStop(sec) {
+    hitStopLeft = Math.max(hitStopLeft, sec);
+  }
+
   function updateCombo(dt) {
     const locked = comboLocked();
     if (locked) {
@@ -536,10 +611,25 @@ const Game = (() => {
     }
     if (comboWasLocked && combo > 0) {
       comboTime = comboTimerMax();
+      comboSinceHit = 0;
       comboWasLocked = false;
     }
-    comboTime -= dt;
-    if (comboTime <= 0) combo = 0;
+    if (combo <= 0) {
+      comboTime = 0;
+      comboSinceHit = 0;
+      return;
+    }
+    comboSinceHit += dt;
+    if (comboSinceHit <= COMBO_IDLE_GRACE) {
+      comboTime = comboTimerMax();
+      return;
+    }
+    comboTime -= dt * COMBO_DECAY_MUL;
+    if (comboTime <= 0) {
+      combo = Math.max(0, combo - 1);
+      comboSinceHit = COMBO_IDLE_GRACE;
+      comboTime = combo > 0 ? comboTimerMax() * 0.4 : 0;
+    }
   }
 
   function caps() {
@@ -592,16 +682,20 @@ const Game = (() => {
 
   function resetArena() {
     player = new Player(w * 0.5, h * 0.5, selectedShipId);
+    drainBullets(bullets);
     bullets = [];
     heartShots = [];
     emillyWasOn = false;
     rocks = [];
+    drainEnemies(enemies);
     enemies = [];
     bosses = [];
     particles = [];
     powers = [];
     combo = 0;
     comboTime = 0;
+    comboSinceHit = 0;
+    hitStopLeft = 0;
     stageScore = 0;
     wave = 1;
     elapsed = 0;
@@ -640,11 +734,8 @@ const Game = (() => {
   function startSurvival(forceNew) {
     AudioFx.resume();
     commitName(els.pilotName.value);
-    if (!forceNew && Save.hasSession() && data().session?.mode === "survival") {
-      continueSavedRun();
-      return;
-    }
-    if (Save.hasSession() && !forceNew) {
+    purgeSurvivalSession();
+    if (Save.hasSession() && data().session?.mode === "story" && !forceNew) {
       const ok = window.confirm("Iniciar nova sobrevivência? A partida salva será apagada.");
       if (!ok) return;
     }
@@ -777,6 +868,9 @@ const Game = (() => {
     if (reason === "plausible" || reason === "cap") {
       return "Nuvem recusou: pontuação incompatível com esta run.";
     }
+    if (reason === "integrity") {
+      return "Nuvem recusou: falha ao assinar a pontuação (atualize a página).";
+    }
     if (reason === "rejected") return "Nuvem recusou o envio (validação ou limite).";
     if (reason === "missing") return "Defina um nome no menu para enviar ao ranking global.";
     return "Nuvem indisponível — tente de novo depois.";
@@ -857,6 +951,7 @@ const Game = (() => {
   function pauseToggle() {
     if (state === "play") {
       state = "pause";
+      syncPauseSave();
       showView("pause");
     } else if (state === "pause") {
       state = "play";
@@ -872,8 +967,12 @@ const Game = (() => {
     if (tags.vital && perks.scoreVitalMul) pts *= perks.scoreVitalMul;
     if (tags.boss && perks.scoreBossMul) pts *= perks.scoreBossMul;
     if (tags.enemy && perks.scoreFarmMul) pts *= perks.scoreFarmMul;
-    combo += 1;
-    comboTime = comboTimerMax();
+    const chainsCombo = !!(tags.enemy || tags.boss || tags.vital);
+    if (chainsCombo) {
+      combo += 1;
+      comboSinceHit = 0;
+      comboTime = comboTimerMax();
+    }
     const gained = Math.floor(pts * multiplier());
     score += gained;
     stageScore += gained;
@@ -926,7 +1025,7 @@ const Game = (() => {
     for (let i = 0; i < n; i++) {
       const p = spawnEdge(w, h);
       const type = pickEnemyType(d.scale);
-      enemies.push(new Enemy(p.x, p.y, type, d.scale));
+      spawnPooledEnemy(enemies, p.x, p.y, type, d.scale);
     }
     els.flash.textContent = "SURTO!";
     els.flash.style.opacity = "1";
@@ -967,7 +1066,7 @@ const Game = (() => {
       forceTypeId || (typeof SurvivalMega !== "undefined" ? SurvivalMega.pickType(cycle) : "titan");
     if (typeof SurvivalMega !== "undefined") SurvivalMega.startEncounter();
     rocks.length = 0;
-    enemies.length = 0;
+    drainEnemies(enemies);
     bosses.length = 0;
     spawningEnabled = false;
     megaBoss = null;
@@ -989,7 +1088,7 @@ const Game = (() => {
 
   function spawnMegaBoss() {
     rocks.length = 0;
-    enemies.length = 0;
+    drainEnemies(enemies);
     spawningEnabled = false;
     materializeMegaEntity();
     bossState = "INTRO";
@@ -1008,7 +1107,8 @@ const Game = (() => {
     if (typeof megaBoss.setFsm === "function") megaBoss.setFsm(BossFSM.DEFEATED);
     bossState = "OUTRO";
     bossIntroTimer = 2;
-    addScore(megaBoss.score, megaBoss.x, megaBoss.y);
+    addScore(megaBoss.score, megaBoss.x, megaBoss.y, { boss: true, shipId: player.shipId });
+    bumpHitStop(HIT_STOP_BOSS_MS);
     burst(megaBoss.x, megaBoss.y, "#6688ff", 36, 280);
     AudioFx.explode(4);
     rumble(280, 0.75);
@@ -1143,13 +1243,13 @@ const Game = (() => {
       }
     } else {
       const vitalRad = (spot) =>
-        typeof megaBoss.vitalHitRadius === "function" ? megaBoss.vitalHitRadius(spot) : (spot.r || 16) + 4;
+        typeof megaBoss.vitalHitRadius === "function" ? megaBoss.vitalHitRadius(spot) : (spot.r || 18) + 16;
       const spots = megaBoss.weakSpots || [];
       for (const spot of spots) {
         if (!spot.alive) continue;
         const pos = megaBoss.getWeakSpotWorldPos(spot);
         const vr = vitalRad(spot);
-        if (dist2(b, { x: pos.x, y: pos.y }) < (b.r + vr) * (b.r + vr)) {
+        if (circleHitsBullet(b, pos.x, pos.y, vr)) {
           cutBullet(i);
           const dmg = megaBulletDamage(b);
           spot.hp -= dmg;
@@ -1242,7 +1342,7 @@ const Game = (() => {
       spawnEnemy = enemyWait * (0.9 + Math.random() * 0.2);
       const p = spawnEdge(w, h);
       const type = pickEnemyType(surv ? surv.scale : 1 + elapsed * 0.012);
-      enemies.push(new Enemy(p.x, p.y, type, surv ? surv.scale : 1));
+      spawnPooledEnemy(enemies, p.x, p.y, type, surv ? surv.scale : 1);
     }
     const needy = player.hp < player.maxHp || (linkHost() && remote && remote.hp < remote.maxHp);
     if (spawnHeal <= 0 && needy) {
@@ -1306,7 +1406,6 @@ const Game = (() => {
     if (ship.multi > 0 && ship.shipId === "dardo") return shotAnglesDardoMulti(aim);
     if (ship.multi > 0 && ship.shipId === "lanca") return shotAnglesLancaMulti(aim);
     if (ship.multi > 0 && ship.shipId === "bastiao") return shotAnglesBastiaoMulti(aim);
-    if (ship.shipId === "bastiao" && ship.shots >= 2) return [aim, aim];
     let n = ship.shots;
     const spread = ship.spread || 0.18;
     const out = [];
@@ -1618,7 +1717,7 @@ const Game = (() => {
     });
   }
 
-  function syncKind(list, rows, make, patch) {
+  function syncKind(list, rows, make, patch, onRemove) {
     const keep = new Set();
     rows.forEach((row) => {
       const id = row[0];
@@ -1632,7 +1731,10 @@ const Game = (() => {
       patch(ent, row);
     });
     for (let i = list.length - 1; i >= 0; i--) {
-      if (!keep.has(list[i].nid)) list.splice(i, 1);
+      if (!keep.has(list[i].nid)) {
+        if (onRemove) onRemove(list[i]);
+        list.splice(i, 1);
+      }
     }
   }
 
@@ -1668,7 +1770,7 @@ const Game = (() => {
     syncKind(
       enemies,
       msg.enemies || [],
-      (row) => new Enemy(row[1] * w, row[2] * h, row[3], row[4]),
+      (row) => spawnPooledEnemy(null, row[1] * w, row[2] * h, row[3], row[4]),
       (ent, row) => {
         pullPos(ent, row[1], row[2]);
         ent.type = row[3];
@@ -1677,6 +1779,9 @@ const Game = (() => {
         ent.hp = row[6];
         ent.r = row[7];
         ent.color = enemyTierColor(ent.scale);
+      },
+      (ent) => {
+        if (typeof EnemyPool !== "undefined") EnemyPool.release(ent);
       }
     );
     syncKind(
@@ -1693,6 +1798,10 @@ const Game = (() => {
       }
     );
     const mine = bullets.filter((b) => b.owner === 1);
+    for (let bi = 0; bi < bullets.length; bi++) {
+      const b = bullets[bi];
+      if (b.owner !== 1 && typeof BulletPool !== "undefined") BulletPool.release(b);
+    }
     bullets = (msg.bullets || [])
       .filter((row) => row[5] !== 1)
       .map((row) => {
@@ -1781,7 +1890,7 @@ const Game = (() => {
       els.shipSubtitle.textContent = "Escolha a nave antes de entrar na sala de espera.";
     } else {
       els.shipSubtitle.textContent =
-        "Dardo faz farm rápido. Lança soma pontos no combo e no mega. Bastião segura a run longa.";
+        "Lança equilibrada. Dardo rápido e frágil. Bastião tank com shotgun.";
     }
   }
 
@@ -1863,6 +1972,7 @@ const Game = (() => {
   }
 
   function openLink() {
+    if (els.btnLink && (els.btnLink.disabled || els.btnLink.classList.contains("coop-locked"))) return;
     AudioFx.resume();
     commitName(els.pilotName.value);
     hangupLink();
@@ -1974,6 +2084,7 @@ const Game = (() => {
     const local = ship === player;
     const perks = shipPerks(ship.shipId);
     if (perks.hullDmgMul) dmg *= perks.hullDmgMul;
+    if (perks.incomingDmgMul) dmg *= perks.incomingDmgMul;
     const hit = ship.hurt(dmg);
     if (hit.shield) {
       burst(ship.x, ship.y, "#4de8ff", 14, 200);
@@ -1994,7 +2105,7 @@ const Game = (() => {
     burst(ship.x, ship.y, local ? "#4de8ff" : "#ff4d9a", 12, 220);
     if (local) {
       AudioFx.hit();
-      shake = 10;
+      shake = Math.max(shake, 11);
       rumble(120, 0.55);
     }
   }
@@ -2002,7 +2113,13 @@ const Game = (() => {
   function grantPower(ship, power) {
     if (power.type === "rapid") ship.rapid = 6;
     if (power.type === "shield") ship.shield = 8 + (shipPerks(ship.shipId).shieldBonus || 0);
-    if (power.type === "multi") ship.multi = 7;
+    if (power.type === "multi") {
+      ship.multi = 7;
+      if (ship === player) {
+        shake = Math.max(shake, 13);
+        rumble(100, 0.5);
+      }
+    }
     if (power.type === "heal") ship.heal(36);
   }
 
@@ -2067,10 +2184,15 @@ const Game = (() => {
           burst(b.x, b.y, "#ff4d9a", 5, 160);
           if (en.hp <= 0) {
             AudioFx.explode(2);
+            const big = (en.score || 0) >= 220 || en.type === "block" || en.type === "orbit";
             addScore(en.score || 120, en.x, en.y, { enemy: true, shipId: b.shipId });
-            enemies.splice(e, 1);
+            releaseEnemyAt(e);
             burst(en.x, en.y, "#c084fc", 16, 240);
             rumble(40, 0.2);
+            if (big) {
+              shake = Math.max(shake, 6);
+              bumpHitStop(HIT_STOP_BIG_MS);
+            }
           }
           if (chainNow) {
             lancaDuplicateOnHit(b, en);
@@ -2097,6 +2219,8 @@ const Game = (() => {
             dropHeal(boss.x, boss.y);
             burst(boss.x, boss.y, boss.color, 28, 280);
             rumble(200, 0.7);
+            shake = Math.max(shake, 12);
+            bumpHitStop(HIT_STOP_BOSS_MS);
             bosses.splice(k, 1);
             if (mode === "story" && (Story.get(stageId).type === "boss" || bossPhase)) completeStage();
           }
@@ -2291,7 +2415,12 @@ const Game = (() => {
 
   function hud() {
     els.score.textContent = score.toLocaleString("pt-BR");
-    els.combo.textContent = `x${multiplier()}` + (combo > 1 ? `  (${combo})` : "");
+    const decaying = combo > 0 && comboSinceHit > COMBO_IDLE_GRACE && !comboLocked();
+    els.combo.textContent =
+      `x${multiplier()}` + (combo > 1 ? `  (${combo})` : "") + (decaying ? " ▾" : "");
+    if (els.combo && els.combo.parentElement) {
+      els.combo.parentElement.classList.toggle("combo-decay", decaying);
+    }
     els.hp.style.width = `${Math.max(0, (player.hp / player.maxHp) * 100)}%`;
     if (els.hpNum) els.hpNum.textContent = `${Math.max(0, Math.ceil(player.hp))}`;
     if (els.shipName) els.shipName.textContent = player.shipName || "LANÇA";
@@ -2407,6 +2536,12 @@ const Game = (() => {
   function loop(t) {
     const dt = Math.min(0.033, (t - last) / 1000 || 0.016);
     last = t;
+    if (hitStopLeft > 0) {
+      hitStopLeft = Math.max(0, hitStopLeft - dt);
+      draw();
+      requestAnimationFrame(loop);
+      return;
+    }
     const input = Input.snapshot();
     if (state === "menu" && els.menuPad) els.menuPad.textContent = Input.status();
     update(dt, input);
@@ -2543,15 +2678,21 @@ const Game = (() => {
     els.btnContinue.addEventListener("click", continueSavedRun);
     els.btnEnter.addEventListener("click", enterHangar);
     els.btnHelp.addEventListener("click", () => {
+      if (typeof HelpControls !== "undefined") HelpControls.apply();
       state = "help";
       showView("help");
     });
     els.btnHelpBack.addEventListener("click", goMenu);
+    window.addEventListener("gamepadconnected", () => {
+      if (state === "help" && typeof HelpControls !== "undefined") HelpControls.apply();
+    });
     els.btnOptions.addEventListener("click", openOptions);
     els.btnPauseOptions.addEventListener("click", openOptions);
     els.btnOptBack.addEventListener("click", closeOptions);
     els.btnOptLayout.addEventListener("click", openLayoutEdit);
     els.btnOptReset.addEventListener("click", () => Settings.reset());
+    const optView = document.getElementById("view-options");
+    if (optView) optView.addEventListener("change", () => syncCoopButton());
     const btnOptTestTouch = document.getElementById("btn-opt-test-touch");
     if (els.btnOptTest) els.btnOptTest.addEventListener("click", () => Settings.test());
     if (btnOptTestTouch) btnOptTestTouch.addEventListener("click", () => Settings.test());
@@ -2590,7 +2731,13 @@ const Game = (() => {
       const extra = mode === "story" ? `fase ${stageId}` : `onda ${wave}`;
       scoreSaved = true;
       lastSaveSignature = sig;
-      publishRankEntry(els.saveMsg, kind, { name, score, extra, shipId });
+      publishRankEntry(els.saveMsg, kind, {
+        name,
+        score,
+        extra,
+        shipId,
+        playSeconds: Math.floor(elapsed),
+      });
     });
     els.btnRetry.addEventListener("click", () => {
       if (mode === "story") startStoryStage(stageId);
@@ -2609,7 +2756,13 @@ const Game = (() => {
       scoreSaved = true;
       lastSaveSignature = sig;
       const shipId = data().shipId;
-      publishRankEntry(els.winMsg, "story", { name, score, extra: "campanha", shipId });
+      publishRankEntry(els.winMsg, "story", {
+        name,
+        score,
+        extra: "campanha",
+        shipId,
+        playSeconds: Math.floor(elapsed),
+      });
     });
     els.btnWinMenu.addEventListener("click", goMenu);
     els.pilotName.addEventListener("change", () => commitName(els.pilotName.value));
@@ -2729,9 +2882,13 @@ const Game = (() => {
     }
     Net.on(onNet);
     refreshTitle();
+    purgeSurvivalSession();
     if (typeof Cloud !== "undefined") {
+      Cloud.watchCoop(() => syncCoopButton());
       Cloud.pull().then(() => refreshTitle());
     }
+    syncCoopButton();
+    syncPauseSave();
     if (data().options.introSeen) {
       state = "menu";
       showView("title");
@@ -2744,4 +2901,11 @@ const Game = (() => {
   }
 
   return { init };
+})();
+
+  window.SpaceSurvivor = Object.freeze({
+    start() {
+      Game.init();
+    },
+  });
 })();

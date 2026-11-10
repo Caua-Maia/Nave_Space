@@ -21,6 +21,43 @@ function dist2(a, b) {
   return dx * dx + dy * dy;
 }
 
+/** Colisão círculo × bala (frame atual + segmento do movimento). */
+function circleHitsBullet(b, cx, cy, cr) {
+  const br = b.r || 3;
+  const R = cr + br;
+  const R2 = R * R;
+  if (dist2(b, { x: cx, y: cy }) <= R2) return true;
+  const px = b.px != null ? b.px : b.x - (b.vx || 0) * 0.034;
+  const py = b.py != null ? b.py : b.y - (b.vy || 0) * 0.034;
+  const dx = b.x - px;
+  const dy = b.y - py;
+  const len2 = dx * dx + dy * dy;
+  if (len2 < 1e-4) return false;
+  let t = ((cx - px) * dx + (cy - py) * dy) / len2;
+  if (t < 0) t = 0;
+  else if (t > 1) t = 1;
+  const qx = px + t * dx;
+  const qy = py + t * dy;
+  const ddx = qx - cx;
+  const ddy = qy - cy;
+  return ddx * ddx + ddy * ddy <= R2;
+}
+
+/** Mira nos megabosses com antecipação da velocidade do alvo. */
+function bossLeadAngle(sx, sy, target, bulletSpeed, leadScale) {
+  if (!target) return Math.PI / 2;
+  leadScale = leadScale == null ? 1 : leadScale;
+  const sp = Math.max(140, bulletSpeed || 240);
+  const vx = target.vx || 0;
+  const vy = target.vy || 0;
+  const vm = Math.hypot(vx, vy);
+  let lead = 0.3 * leadScale;
+  if (vm > 60) lead += Math.min(0.28, (vm / sp) * 0.42);
+  const tx = target.x + vx * lead;
+  const ty = target.y + vy * lead;
+  return Math.atan2(ty - sy, tx - sx);
+}
+
 function spawnEdge(w, h, margin = 40) {
   const side = (Math.random() * 4) | 0;
   if (side === 0) return { x: rand(0, w), y: -margin };
@@ -129,11 +166,14 @@ class Bullet {
     this.lancaIgnoreNid = 0;
     this.lancaSpeed = 0;
     this._pooled = false;
+    this.active = true;
     return this;
   }
   update(dt, w, h) {
     if (this.lancaIgnoreT > 0) this.lancaIgnoreT -= dt;
     this.life -= dt;
+    this.px = this.x;
+    this.py = this.y;
     this.x += this.vx * dt;
     this.y += this.vy * dt;
     if (this.fromPlayer) wrap(this, w, h, 8);
@@ -173,7 +213,8 @@ const ParticlePool = (() => {
 
 const BulletPool = (() => {
   const free = [];
-  const MAX_FREE = 256;
+  const MAX_FREE = 384;
+  const WARM = 192;
   function obtain(x, y, angle, speed, fromPlayer, color, dmg) {
     const b = free.pop();
     if (b) return b.reset(x, y, angle, speed, fromPlayer, color, dmg);
@@ -182,17 +223,63 @@ const BulletPool = (() => {
   function release(b) {
     if (!b || b._pooled) return;
     b._pooled = true;
+    b.active = false;
     b.life = 0;
     b.ghost = false;
     if (free.length < MAX_FREE) free.push(b);
   }
-  return { obtain, release };
+  function warm(n) {
+    const count = Math.max(0, Math.min(MAX_FREE, n | 0));
+    while (free.length < count) {
+      const b = new Bullet(0, 0, 0, 0, true, "#000", 1);
+      b._pooled = true;
+      b.active = false;
+      free.push(b);
+    }
+  }
+  warm(WARM);
+  return { obtain, release, warm };
 })();
 
 function spawnPooledBullet(list, x, y, angle, speed, fromPlayer, color, dmg) {
   const b = BulletPool.obtain(x, y, angle, speed, fromPlayer, color, dmg);
   if (list) list.push(b);
   return b;
+}
+
+const EnemyPool = (() => {
+  const free = [];
+  const MAX_FREE = 96;
+  const WARM = 64;
+  function obtain(x, y, type, scale) {
+    const e = free.pop();
+    if (e) return e.reset(x, y, type, scale);
+    return new Enemy(x, y, type, scale);
+  }
+  function release(e) {
+    if (!e || e._pooled) return;
+    e._pooled = true;
+    e.active = false;
+    e.hp = 0;
+    if (free.length < MAX_FREE) free.push(e);
+  }
+  function warm(n) {
+    const count = Math.max(0, Math.min(MAX_FREE, n | 0));
+    while (free.length < count) {
+      const e = new Enemy(0, 0, "chaser", 1);
+      e._pooled = true;
+      e.active = false;
+      free.push(e);
+    }
+  }
+  warm(WARM);
+  return { obtain, release, warm };
+})();
+
+function spawnPooledEnemy(list, x, y, type, scale) {
+  const e = EnemyPool.obtain(x, y, type, scale);
+  if (list) list.push(e);
+  return e;
 }
 
 class Asteroid {
@@ -540,6 +627,11 @@ function pickEnemyType(scale) {
 
 class Enemy {
   constructor(x, y, type, scale = 1) {
+    this.reset(x, y, type, scale);
+  }
+  reset(x, y, type, scale = 1) {
+    this.active = true;
+    this._pooled = false;
     this.x = x;
     this.y = y;
     this.type = type;
@@ -549,6 +641,8 @@ class Enemy {
     this.cool = rand(0.35, 1.2);
     this.kind = "enemy";
     this.orbit = rand(0, TAU);
+    this.loveAng = undefined;
+    this.nid = 0;
     const bonus = Math.max(0, Math.floor(scale - 1));
     const sm = 1 + Math.min(2.2, (scale - 1) * 0.14);
     const stats = {
@@ -564,6 +658,7 @@ class Enemy {
     this.hp = st.hp + (type === "swarm" ? 0 : bonus);
     this.speed = st.speed * sm;
     this.score = st.score;
+    return this;
   }
   shoot(bullets, angle, speed, color, radius) {
     const b = spawnPooledBullet(null, this.x, this.y, angle, speed, false, color || this.color, 14);
@@ -735,7 +830,6 @@ const SHIP_PERKS = {
     rapidGapScale: 0.42,
   },
   bastiao: {
-    hullDmgMul: 0.85,
     comboGuardCd: 14,
     scoreVitalMul: 1.08,
     scoreBossMul: 1.1,
@@ -744,7 +838,11 @@ const SHIP_PERKS = {
     scoreSurvivalInterval: 25,
     scoreSurvivalPoints: 38,
   },
-  dardo: {},
+  dardo: {
+    incomingDmgMul: 2,
+    scoreFarmMul: 1.1,
+    rapidGapScale: 0.38,
+  },
 };
 
 function shipPerks(shipId) {
@@ -796,9 +894,9 @@ const SHIP_ROSTER = [
   {
     id: "lanca",
     name: "Lança",
-    blurb: "Tiro único que duplica ao acertar inimigo e persegue o próximo 1,2s. Perfura 1 rocha. T: rajada + vértices.",
-    hp: 105,
-    speed: 350,
+    blurb: "Equilibrada. Tiro padrão duplica ao acertar inimigo. T: rajada + vértices.",
+    hp: 100,
+    speed: 340,
     acc: 1000,
     r: 14,
     gap: 0.12,
@@ -811,32 +909,32 @@ const SHIP_ROSTER = [
   {
     id: "dardo",
     name: "Dardo",
-    blurb: "Rápida e frágil. Rei do farm. Com o T, dispara 1 tiro em cada vértice do losango.",
-    hp: 78,
-    speed: 480,
+    blurb: "+30% velocidade e cadência alta. Pouca vida; toma o dobro de dano. T: rajada nos vértices.",
+    hp: 50,
+    speed: 442,
     acc: 1500,
     r: 10,
-    gap: 0.065,
+    gap: 0.048,
     shots: 1,
     spread: 0,
-    bulletSpeed: 940,
-    bulletDmg: 19,
+    bulletSpeed: 900,
+    bulletDmg: 15,
     color: "#58d4ff",
   },
   {
     id: "bastiao",
     name: "Bastião",
-    blurb: "Dois tiros retos. Com T: 2 à frente + 1 tiro por vértice do hexágono.",
-    hp: 150,
-    speed: 250,
-    acc: 720,
-    r: 18,
-    gap: 0.18,
-    shots: 2,
-    spread: 0,
-    bulletSpeed: 520,
-    bulletDmg: 22,
-    color: "#6ab4ff",
+    blurb: "−20% velocidade, hitbox maior, 3× vida. Espalhamento estilo shotgun. T: hex + frente.",
+    hp: 300,
+    speed: 272,
+    acc: 680,
+    r: 21,
+    gap: 0.2,
+    shots: 5,
+    spread: 0.26,
+    bulletSpeed: 500,
+    bulletDmg: 10,
+    color: "#ffb347",
   },
 ];
 

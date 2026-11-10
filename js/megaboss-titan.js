@@ -109,7 +109,7 @@ class MegaBoss {
   }
 
   vitalHitRadius(spot) {
-    return (spot.r || 16) + 4;
+    return (spot.r || 18) + 16;
   }
 
   /** Posição mundial via matriz de rotação 2D (hexRot). */
@@ -123,14 +123,11 @@ class MegaBoss {
   }
 
   getWeakSpotWorldPos(spot) {
-    const a = (spot.localAngle || 0) + this.hexRot;
     const orbit = spot.orbit || 58;
-    spot.offsetX = Math.cos(spot.localAngle || 0) * orbit;
-    spot.offsetY = Math.sin(spot.localAngle || 0) * orbit;
-    return {
-      x: this.x + Math.cos(a) * orbit,
-      y: this.y + Math.sin(a) * orbit,
-    };
+    const la = spot.localAngle || 0;
+    spot.offsetX = Math.cos(la) * orbit;
+    spot.offsetY = Math.sin(la) * orbit;
+    return this.rotateLocal(spot.offsetX, spot.offsetY);
   }
 
   patternEnabled(name) {
@@ -258,6 +255,13 @@ class MegaBoss {
 
     const target = this.pickAggroTarget(player, remote) || player;
     if (target) this.angle = Math.atan2(target.y - this.y, target.x - this.x);
+    if (
+      target &&
+      (this.currentPattern === "BEAM_CHARGE" || this.currentPattern === "BEAM_FIRE")
+    ) {
+      const track = this.currentPattern === "BEAM_CHARGE" ? 1.05 : 0.55;
+      this.beamAngle = bossLeadAngle(this.x, this.y, target, 0, track);
+    }
 
     const rotMul = this.fsmState === BossFSM.DESPERATION_PHASE ? 1.7 : 1;
     if (this.fsmState !== BossFSM.STAGGER) this.hexRot += this.rotationSpeed * rotMul * dt;
@@ -321,11 +325,25 @@ class MegaBoss {
           return;
         }
       }
-      const pickPat = choices[(Math.random() * choices.length) | 0];
+      let pickPat = choices[(Math.random() * choices.length) | 0];
+      if (target) {
+        const d = Math.hypot(target.x - this.x, target.y - this.y);
+        const close = d < 300;
+        const far = d > 440;
+        const pool = [];
+        for (const c of choices) {
+          if (close && c === "HEX_PULSAR" && Math.random() < 0.55) continue;
+          if (far && c === "HEX_PULSAR") pool.push(c);
+          pool.push(c);
+        }
+        if (pool.length) pickPat = pool[(Math.random() * pool.length) | 0];
+        if (close && choices.indexOf("ARC_BURST") >= 0 && Math.random() < 0.45) pickPat = "ARC_BURST";
+        else if (close && choices.indexOf("BEAM_CHARGE") >= 0 && Math.random() < 0.35) pickPat = "BEAM_CHARGE";
+      }
       if (pickPat === "BEAM_CHARGE") {
         this.currentPattern = "BEAM_CHARGE";
         this.patternTimer = tele;
-        this.beamAngle = target ? Math.atan2(target.y - this.y, target.x - this.x) : Math.PI / 2;
+        this.beamAngle = target ? bossLeadAngle(this.x, this.y, target, 0, 1) : Math.PI / 2;
       } else if (pickPat === "ARC_BURST") {
         this.currentPattern = "ARC_BURST";
         this.patternTimer = 0.01;
@@ -346,7 +364,7 @@ class MegaBoss {
         this.patternTimer = (desperate ? 0.55 : 1.05) / pace;
       }
     } else if (this.currentPattern === "HEX_PULSAR") {
-      this.fireHexPulsar(bullets);
+      this.fireHexPulsar(bullets, target);
       this.currentPattern = "IDLE";
       this.patternTimer = (desperate ? 0.72 : 1.25) / pace;
     } else if (this.currentPattern === "ARC_BURST") {
@@ -365,11 +383,21 @@ class MegaBoss {
     return { x: this.x + Math.cos(a) * radius, y: this.y + Math.sin(a) * radius, a };
   }
 
-  fireHexPulsar(bullets) {
+  fireHexPulsar(bullets, target) {
     const rad = this.r + 8;
+    const pace = this._pace || 1;
     for (let i = 0; i < 6; i++) {
       const v = this.hexVertex(i, rad);
-      spawnPooledBullet(bullets, v.x, v.y, v.a, 230, false, "#ff3399", 15);
+      const spd = 248 * pace;
+      const aim = target ? bossLeadAngle(v.x, v.y, target, spd, 1.05) : v.a + Math.PI;
+      spawnPooledBullet(bullets, v.x, v.y, aim, spd, false, "#ff3399", 15);
+    }
+    for (const spot of this.subCores) {
+      if (!spot.alive) continue;
+      const pos = this.getWeakSpotWorldPos(spot);
+      const spd = 252 * pace;
+      const aim = target ? bossLeadAngle(pos.x, pos.y, target, spd, 1) : this.angle;
+      spawnPooledBullet(bullets, pos.x, pos.y, aim, spd, false, "#ff5577", 14);
     }
     AudioFx.bossShootRing();
   }
@@ -379,9 +407,14 @@ class MegaBoss {
   }
 
   fireArcBurst(bullets, target) {
-    const base = target ? Math.atan2(target.y - this.y, target.x - this.x) : this.angle;
-    for (let i = -2; i <= 2; i++) {
-      spawnPooledBullet(bullets, this.x, this.y, base + i * 0.22, 250, false, "#ffe566", 14);
+    const pace = this._pace || 1;
+    const spd = 265 * pace;
+    const base = target ? bossLeadAngle(this.x, this.y, target, spd, 1.1) : this.angle;
+    const spread = target && Math.hypot(target.x - this.x, target.y - this.y) < 320 ? 0.18 : 0.24;
+    const n = this.fsmState === BossFSM.DESPERATION_PHASE ? 7 : 5;
+    for (let i = 0; i < n; i++) {
+      const a = base + (i - (n - 1) / 2) * spread;
+      spawnPooledBullet(bullets, this.x, this.y, a, spd, false, "#ffe566", 14);
     }
     AudioFx.bossShootRing();
   }
@@ -455,7 +488,7 @@ class MegaBoss {
       if (!spot.alive) continue;
       const pos = this.getWeakSpotWorldPos(spot);
       const vr = this.vitalHitRadius(spot);
-      if (dist2(b, pos) >= (b.r + vr) * (b.r + vr)) continue;
+      if (!circleHitsBullet(b, pos.x, pos.y, vr)) continue;
       spot.hp -= dmg;
       this.noteAggro(b.owner, dmg);
       hooks.burst(pos.x, pos.y, "#ffcc00", 8, 200);
