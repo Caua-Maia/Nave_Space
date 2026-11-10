@@ -29,7 +29,7 @@
     <link rel="manifest" href="manifest.json" />
     <link rel="icon" href="icons/icon-192.png" />
     <link rel="apple-touch-icon" href="icons/icon-192.png" />
-    <link rel="stylesheet" href="css/style.css?v=39" />
+    <link rel="stylesheet" href="css/style.css?v=45" />
   </head>
   <body>
     <div id="app">
@@ -74,14 +74,13 @@
           </div>
         </div>
         <div id="boss-hud-mega" class="boss-hud-mega hidden" data-layout="bossMega" data-label="Boss mega">
-          <div class="boss-mega-title">TITAN HEXAGONAL — NÚCLEO AUTÔNOMO</div>
+          <div id="boss-mega-title" class="boss-mega-title">MEGA</div>
           <div class="weakspots-row">
             <div id="ws-left" class="ws-bar"><div class="fill" id="ws-left-fill"></div></div>
             <div id="ws-top" class="ws-bar"><div class="fill" id="ws-top-fill"></div></div>
             <div id="ws-right" class="ws-bar"><div class="fill" id="ws-right-fill"></div></div>
           </div>
           <div class="core-bar-wrapper">
-            <div id="boss-shield-overlay" class="shield-active">ESCUDO REFORÇADO</div>
             <div class="core-bar-track"><div id="boss-core-fill"></div></div>
           </div>
         </div>
@@ -343,16 +342,18 @@
     <script src="js/input.js?v=39"></script>
     <script src="js/platform.js?v=39"></script>
     <script src="js/touch.js?v=39"></script>
-    <script src="js/entities.js?v=39"></script>
+    <script src="js/entities.js?v=47"></script>
     <script src="js/save.js?v=39"></script>
     <script src="js/cloud.js?v=39"></script>
     <script src="js/settings.js?v=39"></script>
     <script src="js/story.js?v=39"></script>
     <script src="js/net.js?v=39"></script>
-    <script src="js/megaboss-survival.js?v=39"></script>
-    <script src="js/megaboss-prisma.js?v=39"></script>
-    <script src="js/megaboss-orbita.js?v=42"></script>
-    <script src="js/game.js?v=42"></script>
+    <script src="js/megaboss-titan.js?v=46"></script>
+    <script src="js/megaboss-survival.js?v=45"></script>
+    <script src="js/megaboss-prisma.js?v=45"></script>
+    <script src="js/megaboss-orbita.js?v=45"></script>
+    <script src="js/easter-egg-stars.js?v=7"></script>
+    <script src="js/game.js?v=48"></script>
     <script src="js/main.js?v=39"></script>
     <script>
       if ("serviceWorker" in navigator) {

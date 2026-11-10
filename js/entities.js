@@ -31,6 +31,9 @@ function spawnEdge(w, h, margin = 40) {
 
 class Particle {
   constructor(x, y, color, speed = 180) {
+    this.reset(x, y, color, speed);
+  }
+  reset(x, y, color, speed = 180) {
     const a = Math.random() * TAU;
     const s = rand(0.3, 1) * speed;
     this.x = x;
@@ -41,6 +44,8 @@ class Particle {
     this.max = this.life;
     this.size = rand(1.5, 4);
     this.color = color;
+    this._pooled = false;
+    return this;
   }
   update(dt) {
     this.life -= dt;
@@ -61,6 +66,9 @@ class Particle {
 
 class Bullet {
   constructor(x, y, angle, speed, fromPlayer, color, dmg = 16) {
+    this.reset(x, y, angle, speed, fromPlayer, color, dmg);
+  }
+  reset(x, y, angle, speed, fromPlayer, color, dmg = 16) {
     this.x = x;
     this.y = y;
     this.vx = Math.cos(angle) * speed;
@@ -70,6 +78,12 @@ class Bullet {
     this.fromPlayer = fromPlayer;
     this.color = color;
     this.dmg = dmg;
+    this.owner = undefined;
+    this.ghost = false;
+    this.shipId = undefined;
+    this.pierce = 0;
+    this._pooled = false;
+    return this;
   }
   update(dt, w, h) {
     this.life -= dt;
@@ -87,6 +101,47 @@ class Bullet {
     ctx.fill();
     ctx.restore();
   }
+}
+
+const ParticlePool = (() => {
+  const free = [];
+  const MAX_FREE = 420;
+  function obtain(x, y, color, speed) {
+    const p = free.pop();
+    if (p) return p.reset(x, y, color, speed);
+    return new Particle(x, y, color, speed);
+  }
+  function release(p) {
+    if (!p || p._pooled) return;
+    p._pooled = true;
+    p.life = 0;
+    if (free.length < MAX_FREE) free.push(p);
+  }
+  return { obtain, release };
+})();
+
+const BulletPool = (() => {
+  const free = [];
+  const MAX_FREE = 256;
+  function obtain(x, y, angle, speed, fromPlayer, color, dmg) {
+    const b = free.pop();
+    if (b) return b.reset(x, y, angle, speed, fromPlayer, color, dmg);
+    return new Bullet(x, y, angle, speed, fromPlayer, color, dmg);
+  }
+  function release(b) {
+    if (!b || b._pooled) return;
+    b._pooled = true;
+    b.life = 0;
+    b.ghost = false;
+    if (free.length < MAX_FREE) free.push(b);
+  }
+  return { obtain, release };
+})();
+
+function spawnPooledBullet(list, x, y, angle, speed, fromPlayer, color, dmg) {
+  const b = BulletPool.obtain(x, y, angle, speed, fromPlayer, color, dmg);
+  if (list) list.push(b);
+  return b;
 }
 
 class Asteroid {
@@ -212,7 +267,7 @@ class Boss {
         this.cool = 1.6;
         for (let i = 0; i < 5; i++) {
           const a = this.t + (i / 5) * TAU;
-          bullets.push(new Bullet(this.x, this.y, a, 180, false, this.color, 14));
+          spawnPooledBullet(bullets, this.x, this.y, a, 180, false, this.color, 14);
         }
       }
     } else if (this.kind === "mini_hunter") {
@@ -222,7 +277,7 @@ class Boss {
       this.cool -= dt;
       if (this.cool <= 0 && d < 480) {
         this.cool = 0.9;
-        bullets.push(new Bullet(this.x, this.y, this.angle, 320, false, this.color, 16));
+        spawnPooledBullet(bullets, this.x, this.y, this.angle, 320, false, this.color, 16);
       }
     } else if (this.kind === "cruiser") {
       const want = 300;
@@ -234,7 +289,7 @@ class Boss {
       if (this.cool <= 0) {
         this.cool = 0.95;
         for (let i = -1; i <= 1; i++) {
-          bullets.push(new Bullet(this.x, this.y, this.angle + i * 0.18, 280, false, this.color, 18));
+          spawnPooledBullet(bullets, this.x, this.y, this.angle + i * 0.18, 280, false, this.color, 18);
         }
       }
     } else {
@@ -249,7 +304,7 @@ class Boss {
         const n = phase2 ? 10 : 6;
         for (let i = 0; i < n; i++) {
           const a = this.t * 1.4 + (i / n) * TAU;
-          bullets.push(new Bullet(this.x, this.y, a, phase2 ? 240 : 200, false, this.color, 18));
+          spawnPooledBullet(bullets, this.x, this.y, a, phase2 ? 240 : 200, false, this.color, 18);
         }
       }
     }
@@ -300,282 +355,7 @@ function megaBeamDamage(ship, amount) {
   ship.iframes = prev;
 }
 
-class MegaBoss {
-  constructor(x, y, opts) {
-    opts = opts || {};
-    this.kindFlag = "mega";
-    this.kind = "mega";
-    this.survivalMode = !!opts.survivalMode;
-    this.profileId = opts.profileId || "titan";
-    this.name = "TITAN HEXAGONAL";
-    this.tier = "boss";
-    this.x = x;
-    this.y = y;
-    this.introStartY = -150;
-    this.targetAnchorY = null;
-    this.angle = Math.PI / 2;
-    this.r = 70;
-    this.coreHp = 400;
-    this.maxCoreHp = 400;
-    this.shieldActive = true;
-    this.alive = true;
-    this.score = 8000;
-    this.t = 0;
-    this.pulseAngle = 0;
-    this.weakSpots = [
-      { id: "left_wing", offsetX: -75, offsetY: 15, r: 18, hp: 100, maxHp: 100, alive: true },
-      { id: "right_wing", offsetX: 75, offsetY: 15, r: 18, hp: 100, maxHp: 100, alive: true },
-      { id: "top_turret", offsetX: 0, offsetY: -50, r: 22, hp: 140, maxHp: 140, alive: true },
-    ];
-    this.currentPattern = "IDLE";
-    this.patternTimer = 0;
-    this.beamAngle = Math.PI / 2;
-    this.attackPhase = 0;
-    this.introLerp = 0;
-    this.survivalPhase = 1;
-    this.patternScale = 1;
-    this.telegraphScale = 1;
-  }
-
-  orientRad() {
-    return this.angle - Math.PI / 2;
-  }
-
-  bulletHullRadius() {
-    return this.r;
-  }
-
-  vitalHitRadius(spot) {
-    return (spot.r || 16) + 4;
-  }
-
-  getWeakSpotWorldPos(spot) {
-    const cos = Math.cos(this.orientRad());
-    const sin = Math.sin(this.orientRad());
-    return {
-      x: this.x + spot.offsetX * cos - spot.offsetY * sin,
-      y: this.y + spot.offsetX * sin + spot.offsetY * cos,
-    };
-  }
-
-  syncShieldFromWeakSpots() {
-    if (!this.shieldActive) return;
-    const anyAlive = this.weakSpots.some((s) => s.alive);
-    if (!anyAlive) {
-      if (this.survivalMode && typeof SurvivalMega !== "undefined") {
-        SurvivalMega.onAllVitalsDown(this);
-      } else {
-        this.shieldActive = false;
-      }
-      AudioFx.explode(4);
-    }
-  }
-
-  updateIntro(dt, w, h, player) {
-    if (!this.alive) return;
-    if (this.targetAnchorY == null) this.targetAnchorY = h * 0.22;
-    const target = this.targetAnchorY;
-    this.introLerp = Math.min(1, this.introLerp + dt / 3);
-    this.y = this.introStartY + (target - this.introStartY) * this.introLerp;
-    this.x = w * 0.5 + Math.sin(this.t * 0.9) * 8;
-    if (player) {
-      const dx = player.x - this.x;
-      const dy = player.y - this.y;
-      this.angle = Math.atan2(dy, dx);
-    }
-    this.t += dt;
-    this.pulseAngle += dt * 3;
-  }
-
-  updateFight(dt, w, h, player, bullets) {
-    if (!this.alive) return;
-    this.t += dt;
-    this.pulseAngle += dt * 3;
-    const dx = player.x - this.x;
-    const dy = player.y - this.y;
-    this.angle = Math.atan2(dy, dx);
-    if (this.currentPattern !== "BEAM_FIRE") {
-      this.x += Math.sin(this.t * 1.1) * 28 * dt;
-    }
-    this.x = Math.max(this.r, Math.min(w - this.r, this.x));
-    this.y = Math.max(this.r + 40, Math.min(h * 0.38, this.y));
-    this.syncShieldFromWeakSpots();
-
-    this.patternTimer -= dt;
-    if (this.currentPattern === "IDLE") {
-        if (this.patternTimer <= 0) {
-        this.patternTimer = 0.4;
-        const tele = (this.telegraphScale || 1) * (0.9 + Math.random() * 0.3);
-        const pace = this.patternScale || 1;
-        if (Math.random() < 0.5) {
-          this.currentPattern = "BEAM_CHARGE";
-          this.patternTimer = 1 * tele;
-          this.beamAngle = Math.PI / 2;
-          this.attackPhase = 0;
-        } else {
-          this.currentPattern = "BULLET_RING";
-          this.patternTimer = 0.01;
-        }
-        this._pace = pace;
-      }
-    } else if (this.currentPattern === "BEAM_CHARGE") {
-      if (this.patternTimer <= 0) {
-        this.currentPattern = "BEAM_FIRE";
-        this.patternTimer = 0.85 / (this._pace || 1);
-        AudioFx.beamLaser();
-      }
-    } else if (this.currentPattern === "BEAM_FIRE") {
-      if (this.patternTimer <= 0) {
-        AudioFx.beamLaserStop();
-        this.currentPattern = "IDLE";
-        this.patternTimer = (1.1 + Math.random() * 0.6) / (this._pace || 1);
-      }
-    } else if (this.currentPattern === "BULLET_RING") {
-      this.fireBulletRing(bullets);
-      this.currentPattern = "IDLE";
-      this.patternTimer = (1.4 + Math.random() * 0.5) / (this._pace || 1);
-    }
-  }
-
-  fireBulletRing(bullets) {
-    const total = 24;
-    const gapIndex1 = (Math.random() * total) | 0;
-    const gapIndex2 = (gapIndex1 + 1) % total;
-    for (let i = 0; i < total; i++) {
-      if (i === gapIndex1 || i === gapIndex2) continue;
-      const angle = (i / total) * TAU;
-      const speed = 220;
-      const bx = this.x + Math.cos(angle) * 24;
-      const by = this.y + Math.sin(angle) * 24;
-      bullets.push(new Bullet(bx, by, angle, speed, false, "#ff3399", 15));
-    }
-    AudioFx.bossShootRing();
-  }
-
-  applyBeamDamage(dt, w, player, remote) {
-    if (!this.alive || this.currentPattern !== "BEAM_FIRE") return;
-    const cx = this.x;
-    const half = 20;
-    const ymin = this.y + 40;
-    const ships = remote ? [player, remote] : [player];
-    for (const ship of ships) {
-      if (!ship || ship.hp <= 0) continue;
-      if (Math.abs(ship.x - cx) > half) continue;
-      if (ship.y < ymin - ship.r) continue;
-      megaBeamDamage(ship, 25 * dt);
-    }
-  }
-
-  traceHullPath(ctx) {
-    ctx.beginPath();
-    ctx.moveTo(0, -60);
-    ctx.lineTo(55, -25);
-    ctx.lineTo(65, 40);
-    ctx.lineTo(0, 65);
-    ctx.lineTo(-65, 40);
-    ctx.lineTo(-55, -25);
-    ctx.closePath();
-  }
-
-  traceOctagon(ctx, radius) {
-    ctx.beginPath();
-    for (let i = 0; i < 8; i++) {
-      const a = (i / 8) * TAU - Math.PI / 2;
-      const px = Math.cos(a) * radius;
-      const py = Math.sin(a) * radius;
-      if (i === 0) ctx.moveTo(px, py);
-      else ctx.lineTo(px, py);
-    }
-    ctx.closePath();
-  }
-
-  drawDiamondReactor(ctx, spot) {
-    const r = spot.r;
-    ctx.beginPath();
-    ctx.moveTo(0, -r);
-    ctx.lineTo(r, 0);
-    ctx.lineTo(0, r);
-    ctx.lineTo(-r, 0);
-    ctx.closePath();
-    ctx.fillStyle = "#ff9900";
-    ctx.shadowBlur = 12;
-    ctx.shadowColor = "#ff9900";
-    ctx.fill();
-    ctx.lineWidth = 2;
-    ctx.strokeStyle = "#ffffff";
-    ctx.stroke();
-    ctx.shadowBlur = 0;
-  }
-
-  draw(ctx, w, h) {
-    if (!this.alive) return;
-
-    ctx.save();
-    ctx.translate(this.x, this.y);
-    ctx.rotate(this.orientRad());
-
-    this.traceHullPath(ctx);
-    ctx.fillStyle = "#1a1d28";
-    ctx.fill();
-    ctx.lineWidth = 3;
-    ctx.strokeStyle = this.shieldActive ? "#ff0055" : "#00f0ff";
-    ctx.stroke();
-
-    ctx.beginPath();
-    ctx.moveTo(0, -35);
-    ctx.lineTo(25, 10);
-    ctx.lineTo(-25, 10);
-    ctx.closePath();
-    ctx.strokeStyle = "rgba(255, 255, 255, 0.2)";
-    ctx.lineWidth = 1.5;
-    ctx.stroke();
-
-    if (this.shieldActive) {
-      const shieldScale = 1 + Math.sin(this.pulseAngle) * 0.03;
-      const rad = (this.r + 15) * shieldScale;
-      this.traceOctagon(ctx, rad);
-      ctx.fillStyle = "rgba(0, 240, 255, 0.25)";
-      ctx.fill();
-      ctx.strokeStyle = "rgba(0, 240, 255, 0.6)";
-      ctx.lineWidth = 2;
-      ctx.stroke();
-    }
-
-    ctx.restore();
-
-    for (const spot of this.weakSpots) {
-      if (!spot.alive) continue;
-      const pos = this.getWeakSpotWorldPos(spot);
-      ctx.save();
-      ctx.translate(pos.x, pos.y);
-      this.drawDiamondReactor(ctx, spot);
-      ctx.restore();
-    }
-
-    if (this.currentPattern === "BEAM_CHARGE") {
-      ctx.save();
-      ctx.strokeStyle = "rgba(255, 0, 85, 0.65)";
-      ctx.lineWidth = 2;
-      ctx.setLineDash([6, 6]);
-      ctx.beginPath();
-      ctx.moveTo(this.x, this.y + 40);
-      ctx.lineTo(this.x, this.y + h);
-      ctx.stroke();
-      ctx.setLineDash([]);
-      ctx.restore();
-    } else if (this.currentPattern === "BEAM_FIRE") {
-      ctx.save();
-      ctx.shadowBlur = 20;
-      ctx.shadowColor = "#00f0ff";
-      ctx.fillStyle = "rgba(0, 240, 255, 0.85)";
-      ctx.fillRect(this.x - 20, this.y + 40, 40, h);
-      ctx.fillStyle = "#ffffff";
-      ctx.shadowBlur = 0;
-      ctx.fillRect(this.x - 6, this.y + 40, 12, h);
-      ctx.restore();
-    }
-  }
-}
+/* MegaBoss (Titan Hexagonal) vive em js/megaboss-titan.js */
 
 class BossDrone {
   constructor(x, y, kind, target) {
@@ -584,11 +364,15 @@ class BossDrone {
     this.kind = kind;
     this.target = target;
     this.t = 0;
+    this.spent = false;
+    this.delivered = false;
+    this.lockedSpot = null;
     if (kind === "repair") {
-      this.hp = 30;
-      this.r = 11;
-      this.speed = 140;
+      this.hp = 22;
+      this.r = 12;
+      this.speed = 170;
       this.color = "#44ff99";
+      this.healPct = 0.28;
     } else {
       this.hp = 15;
       this.r = 10;
@@ -598,40 +382,60 @@ class BossDrone {
       this.lockedY = target && Number.isFinite(target.y) ? target.y : y;
     }
   }
+
+  pickRepairSpot(megaBoss) {
+    if (this.lockedSpot && this.lockedSpot.alive) return this.lockedSpot;
+    const spots = (megaBoss && megaBoss.weakSpots) || [];
+    let best = null;
+    let worst = 2;
+    for (let i = 0; i < spots.length; i++) {
+      const s = spots[i];
+      if (!s.alive) continue;
+      const ratio = s.hp / Math.max(1, s.maxHp);
+      if (ratio < worst) {
+        worst = ratio;
+        best = s;
+      }
+    }
+    this.lockedSpot = best;
+    return best;
+  }
+
+  deliverRepair(spot) {
+    const max = Math.max(1, spot.maxHp);
+    const amount = max * this.healPct;
+    spot.hp = Math.min(max, spot.hp + amount);
+    this.delivered = true;
+    this.spent = true;
+  }
+
   update(dt, w, h, player, megaBoss) {
     this.t += dt;
-    if (this.kind === "repair" && megaBoss) {
-      let spot = null;
-      let best = -1;
-      for (const s of megaBoss.weakSpots) {
-        if (!s.alive) continue;
-        const ratio = s.hp / s.maxHp;
-        if (ratio > best) {
-          best = ratio;
-          spot = s;
-        }
+    if (this.spent) return;
+    if (this.kind === "repair") {
+      const spot = this.pickRepairSpot(megaBoss);
+      if (!spot) {
+        this.spent = true;
+        return;
       }
-      if (spot) {
-        const p = megaBoss.getWeakSpotWorldPos(spot);
-        const dx = p.x - this.x;
-        const dy = p.y - this.y;
-        const d = Math.hypot(dx, dy) || 1;
-        this.x += (dx / d) * this.speed * dt;
-        this.y += (dy / d) * this.speed * dt;
-        if (d < 36) {
-          spot.hp = Math.min(spot.maxHp, spot.hp + 15 * dt);
-        }
-      } else {
-        wrap(this, w, h, this.r);
-      }
-    } else {
-      const dx = this.lockedX - this.x;
-      const dy = this.lockedY - this.y;
+      const p =
+        megaBoss && typeof megaBoss.getWeakSpotWorldPos === "function"
+          ? megaBoss.getWeakSpotWorldPos(spot)
+          : { x: megaBoss.x, y: megaBoss.y };
+      const dx = p.x - this.x;
+      const dy = p.y - this.y;
       const d = Math.hypot(dx, dy) || 1;
-      this.speed = Math.min(420, this.speed + 140 * dt);
       this.x += (dx / d) * this.speed * dt;
       this.y += (dy / d) * this.speed * dt;
+      if (d < 22) this.deliverRepair(spot);
+      return;
     }
+    const dx = this.lockedX - this.x;
+    const dy = this.lockedY - this.y;
+    const d = Math.hypot(dx, dy) || 1;
+    this.speed = Math.min(420, this.speed + 140 * dt);
+    this.x += (dx / d) * this.speed * dt;
+    this.y += (dy / d) * this.speed * dt;
     wrap(this, w, h, this.r);
   }
   draw(ctx) {
@@ -711,7 +515,7 @@ class Enemy {
     this.score = st.score;
   }
   shoot(bullets, angle, speed, color, radius) {
-    const b = new Bullet(this.x, this.y, angle, speed, false, color || this.color, 14);
+    const b = spawnPooledBullet(null, this.x, this.y, angle, speed, false, color || this.color, 14);
     if (radius) b.r = radius;
     bullets.push(b);
   }
@@ -843,11 +647,53 @@ class Enemy {
   }
 }
 
+/** Perks por nave (meta survival / score). */
+const SHIP_PERKS = {
+  lanca: {
+    comboTimerExtra: 0.5,
+    comboKillsPerMult: 3,
+    scoreVitalMul: 1.15,
+    scoreBossMul: 1.12,
+    scoreFarmMul: 1.06,
+    pierceRocks: 1,
+    rapidGapScale: 0.42,
+  },
+  bastiao: {
+    hullDmgMul: 0.85,
+    comboGuardCd: 14,
+    scoreVitalMul: 1.08,
+    scoreBossMul: 1.1,
+    rapidGapScale: 0.46,
+    shieldBonus: 2.5,
+    scoreSurvivalInterval: 25,
+    scoreSurvivalPoints: 38,
+  },
+  dardo: {},
+};
+
+function shipPerks(shipId) {
+  return SHIP_PERKS[shipId] || {};
+}
+
+function comboKillsPerMult(shipId) {
+  const p = shipPerks(shipId);
+  return p.comboKillsPerMult > 0 ? p.comboKillsPerMult : 4;
+}
+
+/** Dano em megaboss (Lança = 1.0). */
+function megaBulletDamage(bullet) {
+  const raw = Math.max(1, bullet.dmg || 16);
+  const id = bullet.shipId || "lanca";
+  const MUL = { lanca: 1, dardo: 0.5, bastiao: 0.68 };
+  const mul = MUL[id] != null ? MUL[id] : 1;
+  return Math.max(1, Math.round(raw * mul));
+}
+
 const SHIP_ROSTER = [
   {
     id: "lanca",
     name: "Lança",
-    blurb: "Equilíbrio. Com o T, três tiros em leque. Boa para quem quer controle e dano constante.",
+    blurb: "Score alto em onda longa. Combo mais folgado, perfura 1 rocha e T em rajada na mira. Melhor nos mega-bosses.",
     hp: 105,
     speed: 350,
     acc: 1000,
@@ -877,7 +723,7 @@ const SHIP_ROSTER = [
   {
     id: "bastiao",
     name: "Bastião",
-    blurb: "Hexágono pesado. Mais vida, anda devagar e dispara dois canhões laterais o tempo todo.",
+    blurb: "Run estável: menos dano recebido, T em salva larga e pontos por tempo vivo. Dois canhões laterais no dia a dia.",
     hp: 150,
     speed: 250,
     acc: 720,
@@ -964,8 +810,12 @@ class Player {
     this.rapid = 0;
     this.shield = 0;
     this.multi = 0;
+    this.starBlessing = 0;
+    this.comboGuardReady = 0;
+    this.survivalScoreAcc = 0;
   }
   update(dt, input, w, h) {
+    this.comboGuardReady = Math.max(0, this.comboGuardReady - dt);
     const acc = this.acc;
     const max = this.maxSpeed;
     this.vx += input.move.x * acc * dt;
@@ -1038,10 +888,14 @@ class Player {
     ctx.lineWidth = 1.2;
     ctx.stroke();
     if (this.shield > 0) {
-      ctx.strokeStyle = "rgba(124,255,178,0.7)";
+      const bless = this.starBlessing > 0;
+      ctx.strokeStyle = bless ? "rgba(255,105,180,0.85)" : "rgba(124,255,178,0.7)";
+      ctx.shadowColor = bless ? "#da70d6" : "transparent";
+      ctx.shadowBlur = bless ? 14 : 0;
       ctx.beginPath();
       ctx.arc(0, 0, 22, 0, TAU);
       ctx.stroke();
+      ctx.shadowBlur = 0;
     }
     ctx.restore();
   }

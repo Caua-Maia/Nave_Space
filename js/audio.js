@@ -116,6 +116,10 @@ const AudioFx = (() => {
       beep(440, 0.12, "sine", 0.18);
       beep(660, 0.16, "sine", 0.16);
     },
+    starCollect() {
+      beep(880, 0.07, "sine", 0.12);
+      setTimeout(() => beep(1170, 0.09, "triangle", 0.1), 45);
+    },
     boss() {
       beep(90, 0.35, "sawtooth", 0.28);
       beep(180, 0.25, "square", 0.16);

@@ -381,6 +381,11 @@ body:not(.hud-edit) #boss-hud:not(.hidden) + #boss-hud-mega:not(.hidden) {
   transform: scaleX(1);
 }
 
+.ws-bar.dead {
+  opacity: 0.35;
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
 .core-bar-wrapper {
   position: relative;
   width: 100%;
@@ -400,25 +405,6 @@ body:not(.hud-edit) #boss-hud:not(.hidden) + #boss-hud-mega:not(.hidden) {
   height: 100%;
   width: 100%;
   background: linear-gradient(90deg, #4de8ff, #6688ff);
-}
-
-#boss-shield-overlay {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: clamp(10px, 1.1vw, 12px);
-  letter-spacing: 0.14em;
-  color: rgba(0, 240, 255, 0.95);
-  text-shadow: 0 0 8px rgba(0, 240, 255, 0.5);
-  pointer-events: none;
-  border-radius: 99px;
-  background: rgba(5, 7, 15, 0.55);
-}
-
-#boss-shield-overlay:not(.shield-active) {
-  display: none;
 }
 
 .stat span:last-child {

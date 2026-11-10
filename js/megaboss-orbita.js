@@ -19,8 +19,8 @@ class OrbitaMega {
     this.ringRadius = 0;
     this.r = 36;
     this.vitalHitPad = 11;
-    this.coreHp = 380;
-    this.maxCoreHp = 380;
+    this.coreHp = 500;
+    this.maxCoreHp = 500;
     this.shieldActive = true;
     this.alive = true;
     this.score = 9600;
@@ -36,8 +36,8 @@ class OrbitaMega {
         offsetX: 0,
         offsetY: 0,
         r: 19,
-        hp: 88,
-        maxHp: 88,
+        hp: 155,
+        maxHp: 155,
         alive: true,
         shootTimer: 0.9 + i * 0.12,
         telegraph: 0,
@@ -225,7 +225,7 @@ class OrbitaMega {
     for (let i = 0; i < total; i++) {
       if (i === g1 || i === g2 || i === g3) continue;
       const a = (i / total) * TAU + this.ringSpin * 0.4;
-      bullets.push(new Bullet(this.x, this.y, a, 175 * this._pace, false, "#ff66bb", 15));
+      spawnPooledBullet(bullets, this.x, this.y, a, 175 * this._pace, false, "#ff66bb", 15);
     }
     AudioFx.bossShootRing();
   }
@@ -237,8 +237,8 @@ class OrbitaMega {
       const pos = this.getWeakSpotWorldPos(spot);
       const toP = Math.atan2(player.y - pos.y, player.x - pos.x);
       const along = spot.baseAngle + this.ringSpin * 0.35;
-      bullets.push(new Bullet(pos.x, pos.y, toP, 210 * this._pace, false, "#ff4d9a", 14));
-      bullets.push(new Bullet(pos.x, pos.y, along + Math.PI / 2, 165, false, "#ffb347", 12));
+      spawnPooledBullet(bullets, pos.x, pos.y, toP, 210 * this._pace, false, "#ff4d9a", 14);
+      spawnPooledBullet(bullets, pos.x, pos.y, along + Math.PI / 2, 165, false, "#ffb347", 12);
       if (++fired >= 4) break;
     }
     AudioFx.bossShootRing();
@@ -254,8 +254,7 @@ class OrbitaMega {
   const speed = (isFollowUp ? 240 : 215) * pace;
     for (let i = 0; i < n; i++) {
       const a = aim + (i - (n - 1) / 2) * spread;
-      const b = new Bullet(pos.x, pos.y, a, speed, false, isFollowUp ? "#ffb347" : "#ff4d9a", isFollowUp ? 15 : 14);
-      bullets.push(b);
+      spawnPooledBullet(bullets, pos.x, pos.y, a, speed, false, isFollowUp ? "#ffb347" : "#ff4d9a", isFollowUp ? 15 : 14);
     }
     if (!isFollowUp) AudioFx.bossShootRing();
   }
