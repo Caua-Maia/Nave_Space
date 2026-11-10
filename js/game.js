@@ -67,7 +67,8 @@ const Game = (() => {
   }
 
   function multiplier() {
-    return 1 + Math.floor(combo / 4);
+    const step = comboKillsPerMult(player ? player.shipId : "lanca");
+    return 1 + Math.floor(combo / step);
   }
 
   function rumble(ms, mag) {
@@ -87,7 +88,25 @@ const Game = (() => {
   }
 
   function burst(x, y, color, n, speed) {
-    for (let i = 0; i < n; i++) particles.push(new Particle(x, y, color, speed));
+    for (let i = 0; i < n; i++) {
+      particles.push(ParticlePool.obtain(x, y, color, speed));
+    }
+  }
+
+  function cutBullet(i) {
+    const b = bullets[i];
+    if (b && typeof BulletPool !== "undefined") BulletPool.release(b);
+    bullets.splice(i, 1);
+  }
+
+  function pruneLive(list, keep, release) {
+    let n = 0;
+    for (let i = 0; i < list.length; i++) {
+      const it = list[i];
+      if (keep(it)) list[n++] = it;
+      else if (release) release(it);
+    }
+    list.length = n;
   }
 
   function makeStars() {
@@ -298,7 +317,7 @@ const Game = (() => {
     bullets = s.bullets.map((b) => {
       const ang = Math.atan2(b.vy, b.vx);
       const spd = Math.hypot(b.vx, b.vy);
-      const bullet = new Bullet(ux(b.x), uy(b.y), ang, spd, b.fromPlayer, b.color, b.dmg);
+      const bullet = spawnPooledBullet(null, ux(b.x), uy(b.y), ang, spd, b.fromPlayer, b.color, b.dmg);
       bullet.life = b.life;
       bullet.r = b.r;
       return bullet;
@@ -329,6 +348,10 @@ const Game = (() => {
     try {
       AudioFx.resume();
       applySessionSnapshot(s);
+      if (typeof EasterEggStars !== "undefined") {
+        EasterEggStars.reset();
+        if (mode === "survival") EasterEggStars.onWave(wave, w, h, { likeSurvival });
+      }
       state = "play";
       hideOverlay();
       els.hud.classList.remove("hidden");
@@ -456,7 +479,24 @@ const Game = (() => {
   }
 
   function comboTimerMax() {
-    return typeof SurvivalMega !== "undefined" ? SurvivalMega.COMBO_TIMER_MAX : 2.1;
+    let base = typeof SurvivalMega !== "undefined" ? SurvivalMega.COMBO_TIMER_MAX : 2.1;
+    if (player && player.shipId === "lanca") {
+      base += shipPerks("lanca").comboTimerExtra || 0;
+    }
+    return base;
+  }
+
+  function tickSurvivalShipPerks(dt) {
+    if (!likeSurvival() || !player || state !== "play") return;
+    const perks = shipPerks(player.shipId);
+    if (perks.scoreSurvivalInterval && perks.scoreSurvivalPoints) {
+      player.survivalScoreAcc = (player.survivalScoreAcc || 0) + dt;
+      if (player.survivalScoreAcc >= perks.scoreSurvivalInterval) {
+        player.survivalScoreAcc -= perks.scoreSurvivalInterval;
+        score += perks.scoreSurvivalPoints;
+        stageScore += perks.scoreSurvivalPoints;
+      }
+    }
   }
 
   function updateCombo(dt) {
@@ -556,6 +596,7 @@ const Game = (() => {
     comboWasLocked = false;
     survivalMegaTypeId = "titan";
     spawningEnabled = true;
+    if (typeof EasterEggStars !== "undefined") EasterEggStars.reset();
     AudioFx.bossWarningStop();
     AudioFx.beamLaserStop();
     if (els.bossHudMega) els.bossHudMega.classList.add("hidden");
@@ -767,10 +808,17 @@ const Game = (() => {
     }
   }
 
-  function addScore(base, x, y) {
+  function addScore(base, x, y, tags) {
+    tags = tags || {};
+    let pts = base;
+    const sid = tags.shipId || (player && player.shipId) || "lanca";
+    const perks = shipPerks(sid);
+    if (tags.vital && perks.scoreVitalMul) pts *= perks.scoreVitalMul;
+    if (tags.boss && perks.scoreBossMul) pts *= perks.scoreBossMul;
+    if (tags.enemy && perks.scoreFarmMul) pts *= perks.scoreFarmMul;
     combo += 1;
-    comboTime = 2.1;
-    const gained = Math.floor(base * multiplier());
+    comboTime = comboTimerMax();
+    const gained = Math.floor(pts * multiplier());
     score += gained;
     stageScore += gained;
     if (combo > 1 && combo % 5 === 0) {
@@ -841,9 +889,10 @@ const Game = (() => {
     if (megaBoss) return megaBoss;
     const cycle = typeof SurvivalMega !== "undefined" ? SurvivalMega.defeatedCount() : 0;
     if (typeof SurvivalMega !== "undefined" && survivalMegaTypeId) {
-      megaBoss = SurvivalMega.createInstance(survivalMegaTypeId, w * 0.5, -100, cycle, w, h);
+      megaBoss = SurvivalMega.createInstance(survivalMegaTypeId, w * 0.5, -100, cycle, w, h, wave);
     } else {
       megaBoss = new MegaBoss(w * 0.5, -100);
+      if (typeof SurvivalMega !== "undefined") SurvivalMega.scaleBoss(megaBoss, 0, mode === "story" ? 18 : wave);
     }
     megaBoss.introStartY = megaBoss.introStartY != null ? megaBoss.introStartY : -100;
     if (megaBoss.targetAnchorY == null) megaBoss.targetAnchorY = h * 0.22;
@@ -900,6 +949,7 @@ const Game = (() => {
   function triggerMegaBossDefeat() {
     if (!megaBoss || bossState !== "FIGHT") return;
     megaBoss.alive = false;
+    if (typeof megaBoss.setFsm === "function") megaBoss.setFsm(BossFSM.DEFEATED);
     bossState = "OUTRO";
     bossIntroTimer = 2;
     addScore(megaBoss.score, megaBoss.x, megaBoss.y);
@@ -953,8 +1003,11 @@ const Game = (() => {
         bossState = "FIGHT";
         megaBoss.introLerp = 1;
         megaBoss.y = megaBoss.targetAnchorY != null ? megaBoss.targetAnchorY : h * 0.22;
-        megaBoss.currentPattern = "IDLE";
-        megaBoss.patternTimer = 0.4;
+        if (typeof megaBoss.onFightStart === "function") megaBoss.onFightStart();
+        else {
+          megaBoss.currentPattern = "IDLE";
+          megaBoss.patternTimer = 0.4;
+        }
         bossDroneTimer = 11;
       }
     } else if (bossState === "FIGHT") {
@@ -962,7 +1015,7 @@ const Game = (() => {
         SurvivalMega.tickPhase(dt, megaBoss);
         if (megaBoss.survivalPhase != null) megaBoss.survivalPhase = SurvivalMega.getPhase();
       }
-      megaBoss.updateFight(dt, w, h, player, bullets);
+      megaBoss.updateFight(dt, w, h, player, bullets, remote);
       if (typeof megaBoss.applyHazards === "function") megaBoss.applyHazards(dt, w, h, player, remote);
       else megaBoss.applyBeamDamage(dt, w, player, remote);
       const firing =
@@ -991,72 +1044,97 @@ const Game = (() => {
 
   function updateMegaBossHud() {
     if (!megaBoss || !els.bossHudMega) return;
-    const ws = megaBoss.weakSpots || [];
+    const model = typeof megaBoss.hudModel === "function" ? megaBoss.hudModel() : null;
+    const ws = (model && model.cores) || megaBoss.weakSpots || megaBoss.subCores || [];
     const setFill = (el, cur, max) => {
       if (!el) return;
-      el.style.width = `${Math.max(0, Math.min(100, (cur / max) * 100))}%`;
+      el.style.width = `${Math.max(0, Math.min(100, (cur / Math.max(1, max)) * 100))}%`;
     };
-    const fills = [els.wsLeftFill, els.wsTopFill, els.wsRightFill];
-    for (let i = 0; i < fills.length; i++) {
-      const s = ws[i];
-      if (!fills[i]) continue;
-      setFill(fills[i], s && s.alive ? s.hp : 0, s ? s.maxHp : 1);
+    const byHud = { left: ws[0], top: ws[1], right: ws[2] };
+    for (let i = 0; i < ws.length; i++) {
+      if (ws[i].hud === "left") byHud.left = ws[i];
+      if (ws[i].hud === "top") byHud.top = ws[i];
+      if (ws[i].hud === "right") byHud.right = ws[i];
     }
-    if (els.bossCoreFill)
-      els.bossCoreFill.style.width = `${Math.max(0, (megaBoss.coreHp / megaBoss.maxCoreHp) * 100)}%`;
-    if (els.bossShieldOverlay)
-      els.bossShieldOverlay.classList.toggle("shield-active", megaBoss.shieldActive);
+    const slots = [
+      [els.wsLeftFill, byHud.left, document.getElementById("ws-left")],
+      [els.wsTopFill, byHud.top, document.getElementById("ws-top")],
+      [els.wsRightFill, byHud.right, document.getElementById("ws-right")],
+    ];
+    for (let i = 0; i < slots.length; i++) {
+      const fill = slots[i][0];
+      const s = slots[i][1];
+      const bar = slots[i][2];
+      if (fill) setFill(fill, s && s.alive ? s.hp : 0, s ? s.maxHp : 1);
+      if (bar) bar.classList.toggle("dead", !(s && s.alive));
+    }
+    const hp = model ? model.hp : megaBoss.coreHp;
+    const hpMax = model ? model.hpMax : megaBoss.maxCoreHp;
+    if (els.bossCoreFill) els.bossCoreFill.style.width = `${Math.max(0, (hp / Math.max(1, hpMax)) * 100)}%`;
   }
 
   function megaBossPlayerBulletHit(i, b) {
     if (!megaBoss || !megaBoss.alive || bossState !== "FIGHT" || !b.fromPlayer || b.ghost) return false;
-    const vitalRad = (spot) =>
-      typeof megaBoss.vitalHitRadius === "function" ? megaBoss.vitalHitRadius(spot) : (spot.r || 16) + 4;
-    for (const spot of megaBoss.weakSpots) {
-      if (!spot.alive) continue;
-      const pos = megaBoss.getWeakSpotWorldPos(spot);
-      const vr = vitalRad(spot);
-      if (dist2(b, { x: pos.x, y: pos.y }) < (b.r + vr) * (b.r + vr)) {
-        bullets.splice(i, 1);
-        const dmg = Math.max(1, Math.round(b.dmg || 16));
-        spot.hp -= dmg;
-        burst(pos.x, pos.y, "#ffcc00", 8, 200);
-        AudioFx.hit();
-        if (spot.hp <= 0) {
-          spot.hp = 0;
-          spot.alive = false;
-          burst(pos.x, pos.y, "#ff3366", 18, 260);
-          AudioFx.explode(2);
-          addScore(500, pos.x, pos.y);
+    if (typeof megaBoss.handlePlayerBullet === "function") {
+      const hit = megaBoss.handlePlayerBullet(b, {
+        burst,
+        addScore,
+        onCoreDown: triggerMegaBossDefeat,
+      });
+      if (hit) {
+        cutBullet(i);
+        return true;
+      }
+    } else {
+      const vitalRad = (spot) =>
+        typeof megaBoss.vitalHitRadius === "function" ? megaBoss.vitalHitRadius(spot) : (spot.r || 16) + 4;
+      const spots = megaBoss.weakSpots || [];
+      for (const spot of spots) {
+        if (!spot.alive) continue;
+        const pos = megaBoss.getWeakSpotWorldPos(spot);
+        const vr = vitalRad(spot);
+        if (dist2(b, { x: pos.x, y: pos.y }) < (b.r + vr) * (b.r + vr)) {
+          cutBullet(i);
+          const dmg = megaBulletDamage(b);
+          spot.hp -= dmg;
+          burst(pos.x, pos.y, "#ffcc00", 8, 200);
+          AudioFx.hit();
+          if (spot.hp <= 0) {
+            spot.hp = 0;
+            spot.alive = false;
+            burst(pos.x, pos.y, "#ff3366", 18, 260);
+            AudioFx.explode(2);
+            addScore(500, pos.x, pos.y, { vital: true, shipId: b.shipId });
+          }
+          return true;
+        }
+      }
+      const hullR =
+        typeof megaBoss.bulletHullRadius === "function" ? megaBoss.bulletHullRadius() : megaBoss.r;
+      if (dist2(b, megaBoss) < (b.r + hullR) * (b.r + hullR)) {
+        cutBullet(i);
+        const survivalCore =
+          megaBoss.survivalMode && typeof SurvivalMega !== "undefined" && !SurvivalMega.coreOpen(megaBoss);
+        if (megaBoss.shieldActive || survivalCore) {
+          burst(b.x, b.y, "#00f0ff", 5, 220);
+          AudioFx.shieldDeflect();
+        } else {
+          const dmg = megaBulletDamage(b);
+          megaBoss.coreHp -= dmg;
+          burst(b.x, b.y, "#ff0055", 6, 200);
+          AudioFx.hit();
+          if (megaBoss.coreHp <= 0) {
+            megaBoss.coreHp = 0;
+            triggerMegaBossDefeat();
+          }
         }
         return true;
       }
     }
-    const hullR =
-      typeof megaBoss.bulletHullRadius === "function" ? megaBoss.bulletHullRadius() : megaBoss.r;
-    if (dist2(b, megaBoss) < (b.r + hullR) * (b.r + hullR)) {
-      bullets.splice(i, 1);
-      const survivalCore =
-        megaBoss.survivalMode && typeof SurvivalMega !== "undefined" && !SurvivalMega.coreOpen(megaBoss);
-      if (megaBoss.shieldActive || survivalCore) {
-        burst(b.x, b.y, "#00f0ff", 5, 220);
-        AudioFx.shieldDeflect();
-      } else {
-        const dmg = Math.max(1, Math.round(b.dmg || 16));
-        megaBoss.coreHp -= dmg;
-        burst(b.x, b.y, "#ff0055", 6, 200);
-        AudioFx.hit();
-        if (megaBoss.coreHp <= 0) {
-          megaBoss.coreHp = 0;
-          triggerMegaBossDefeat();
-        }
-      }
-      return true;
-    }
     for (let d = bossDrones.length - 1; d >= 0; d--) {
       const dr = bossDrones[d];
       if (dist2(b, dr) < (b.r + dr.r) * (b.r + dr.r)) {
-        bullets.splice(i, 1);
+        cutBullet(i);
         const dmg = Math.max(1, Math.round(b.dmg || 16));
         dr.hp -= dmg;
         burst(dr.x, dr.y, dr.color, 5, 160);
@@ -1129,7 +1207,12 @@ const Game = (() => {
     const newWave = 1 + Math.floor(elapsed / waveLen);
     if (newWave !== wave) {
       wave = newWave;
-      if (likeSurvival()) maybeSpawnSurvivalBoss();
+      if (likeSurvival()) {
+        maybeSpawnSurvivalBoss();
+        if (typeof EasterEggStars !== "undefined") {
+          EasterEggStars.onWave(wave, w, h, { likeSurvival });
+        }
+      }
     }
 
     if (mode === "story") tickStory();
@@ -1151,14 +1234,35 @@ const Game = (() => {
     }
   }
 
+  function shotMultiMode(ship) {
+    if (!(ship.multi > 0)) return 0;
+    if (ship.shipId === "dardo") return 1;
+    if (ship.shipId === "lanca") return 2;
+    if (ship.shipId === "bastiao") return 3;
+    return 0;
+  }
+
   function shotAnglesFor(ship, aim, dualBack) {
     if (dualBack || (ship.multi > 0 && ship.shipId === "dardo")) {
       return [aim, aim + Math.PI];
     }
+    if (ship.multi > 0 && ship.shipId === "lanca") {
+      const tight = 0.035;
+      return [aim - tight, aim, aim + tight];
+    }
+    if (ship.multi > 0 && ship.shipId === "bastiao") {
+      const n = 7;
+      const span = 1.12;
+      const out = [];
+      for (let i = 0; i < n; i++) out.push(aim + (i - (n - 1) / 2) * (span / (n - 1)));
+      return out;
+    }
+    if (ship.shipId === "bastiao" && ship.shots >= 2) {
+      const off = 0.42;
+      return [aim - off, aim + off];
+    }
     let n = ship.shots;
-    let spread = ship.spread || 0.18;
-    if (ship.multi > 0 && ship.shipId === "lanca") n = 3;
-    if (ship.multi > 0 && ship.shipId === "bastiao") n = 3;
+    const spread = ship.spread || 0.18;
     const out = [];
     for (let i = 0; i < n; i++) {
       out.push(aim + (n === 1 ? 0 : (i - (n - 1) / 2) * spread));
@@ -1167,8 +1271,24 @@ const Game = (() => {
   }
 
   function anglesFromShotMsg(msg, ship, aim) {
-    if (msg.dual) return [aim, aim + Math.PI];
-    const n = Math.max(1, Math.min(5, msg.n | 0));
+    const mode = msg.multiMode | 0;
+    if (msg.dual || mode === 1) return [aim, aim + Math.PI];
+    if (mode === 2) {
+      const tight = 0.035;
+      return [aim - tight, aim, aim + tight];
+    }
+    if (mode === 3) {
+      const n = 7;
+      const span = 1.12;
+      const out = [];
+      for (let i = 0; i < n; i++) out.push(aim + (i - (n - 1) / 2) * (span / (n - 1)));
+      return out;
+    }
+    if (ship.shipId === "bastiao" && (msg.n | 0) === 2) {
+      const off = 0.42;
+      return [aim - off, aim + off];
+    }
+    const n = Math.max(1, Math.min(8, msg.n | 0));
     if (n > 1) {
       const spread = Number(msg.spread) || 0;
       const out = [];
@@ -1178,12 +1298,27 @@ const Game = (() => {
     return [aim];
   }
 
+  function bulletDmgForShip(ship, baseDmg, angleIndex, angleCount) {
+    let dmg = baseDmg;
+    if (ship.multi > 0 && ship.shipId === "lanca" && angleCount === 3 && angleIndex === 1) {
+      dmg = Math.round(baseDmg * 1.22);
+    }
+    if (ship.multi > 0 && ship.shipId === "bastiao" && angleCount === 7) {
+      dmg = Math.max(1, Math.round(baseDmg * 0.52));
+    }
+    return dmg;
+  }
+
   function spawnBulletsFor(ship, x, y, aim, owner, msg) {
     const tint = ship.pilotColor || ship.color;
-    const dmg = ship.bulletDmg || 16;
+    const baseDmg = ship.bulletDmg || 16;
+    const withMulti = msg ? (msg.multiMode | 0) > 0 : ship.multi > 0;
     const angles = msg ? anglesFromShotMsg(msg, ship, aim) : shotAnglesFor(ship, aim);
-    angles.forEach((a) => {
-      const b = new Bullet(
+    const pe = shipPerks(ship.shipId);
+    angles.forEach((a, idx) => {
+      const dmg = bulletDmgForShip(ship, baseDmg, idx, angles.length);
+      const b = spawnPooledBullet(
+        bullets,
         x + Math.cos(a) * 18,
         y + Math.sin(a) * 18,
         a,
@@ -1192,10 +1327,11 @@ const Game = (() => {
         tint,
         dmg
       );
+      b.shipId = ship.shipId;
       if (ship.shipId === "dardo") b.r = 2.2;
-      if (ship.shipId === "bastiao") b.r = 4.4;
+      if (ship.shipId === "bastiao") b.r = withMulti && angles.length > 3 ? 3.6 : 4.4;
+      if (ship.shipId === "lanca" && !withMulti && pe.pierceRocks) b.pierce = pe.pierceRocks;
       if (mode === "link") b.owner = owner;
-      bullets.push(b);
     });
     return {
       t: "shot",
@@ -1207,6 +1343,7 @@ const Game = (() => {
       speed: ship.bulletSpeed,
       shipId: ship.shipId,
       dual: ship.multi > 0 && ship.shipId === "dardo" ? 1 : 0,
+      multiMode: msg ? msg.multiMode | 0 : shotMultiMode(ship),
     };
   }
 
@@ -1241,7 +1378,11 @@ const Game = (() => {
     }
     if (Math.hypot(aimX, aimY) > 0.01) player.aim = Math.atan2(aimY, aimX);
     if (!want || player.cool > 0) return;
-    const gap = player.rapid > 0 ? player.gap * 0.55 : player.gap;
+    let gap = player.gap;
+    if (player.rapid > 0) {
+      const rapidScale = shipPerks(player.shipId).rapidGapScale;
+      gap = rapidScale ? player.gap * rapidScale : player.gap * 0.55;
+    }
     player.cool = gap;
     const owner = mode === "link" && Net.role() === "guest" ? 1 : 0;
     const shotMsg = spawnBulletsFor(player, player.x, player.y, player.aim, owner);
@@ -1430,7 +1571,7 @@ const Game = (() => {
       .map((row) => {
         const angle = Math.atan2(row[3] * h, row[2] * w);
         const speed = Math.hypot(row[2] * w, row[3] * h);
-        const b = new Bullet(row[0] * w, row[1] * h, angle, speed || 1, row[4] === 1, row[7], 16);
+        const b = spawnPooledBullet(null, row[0] * w, row[1] * h, angle, speed || 1, row[4] === 1, row[7], 16);
         b.vx = row[2] * w;
         b.vy = row[3] * h;
         b.r = row[6];
@@ -1513,7 +1654,7 @@ const Game = (() => {
       els.shipSubtitle.textContent = "Escolha a nave antes de entrar na sala de espera.";
     } else {
       els.shipSubtitle.textContent =
-        "Três formas, três jeitos de jogar. A Lança é a clássica. Dardo e Bastião são as novas.";
+        "Dardo faz farm rápido. Lança soma pontos no combo e no mega. Bastião segura a run longa.";
     }
   }
 
@@ -1704,6 +1845,8 @@ const Game = (() => {
   function strike(ship, dmg) {
     if (!ship || ship.hp <= 0) return;
     const local = ship === player;
+    const perks = shipPerks(ship.shipId);
+    if (perks.hullDmgMul) dmg *= perks.hullDmgMul;
     const hit = ship.hurt(dmg);
     if (hit.shield) {
       burst(ship.x, ship.y, "#4de8ff", 14, 200);
@@ -1717,6 +1860,10 @@ const Game = (() => {
       return;
     }
     if (!hit.hull) return;
+    if (local && ship.shipId === "bastiao" && combo > 0 && perks.comboGuardCd && ship.comboGuardReady <= 0) {
+      ship.comboGuardReady = perks.comboGuardCd;
+      comboTime = comboTimerMax();
+    }
     burst(ship.x, ship.y, local ? "#4de8ff" : "#ff4d9a", 12, 220);
     if (local) {
       AudioFx.hit();
@@ -1727,7 +1874,7 @@ const Game = (() => {
 
   function grantPower(ship, power) {
     if (power.type === "rapid") ship.rapid = 6;
-    if (power.type === "shield") ship.shield = 8;
+    if (power.type === "shield") ship.shield = 8 + (shipPerks(ship.shipId).shieldBonus || 0);
     if (power.type === "multi") ship.multi = 7;
     if (power.type === "heal") ship.heal(36);
   }
@@ -1742,7 +1889,7 @@ const Game = (() => {
         for (let s = 0; s < ships.length; s++) {
           const ship = ships[s];
           if (dist2(b, ship) < (b.r + ship.r) * (b.r + ship.r)) {
-            bullets.splice(i, 1);
+            cutBullet(i);
             strike(ship, b.dmg || 16);
             break;
           }
@@ -1753,19 +1900,25 @@ const Game = (() => {
       for (let r = rocks.length - 1; r >= 0; r--) {
         const rock = rocks[r];
         if (dist2(b, rock) < (b.r + rock.r) * (b.r + rock.r)) {
-          bullets.splice(i, 1);
           const bd = b.dmg || 16;
-          // HP por tiro = bulletDmg/16 (16 = Lança); sem arredondamento para não colapsar Dardo vs Lança.
           rock.hp = Math.max(0, rock.hp - bd / 16);
           burst(b.x, b.y, "#ffb347", 6, 140);
           if (rock.hp <= 0) {
             AudioFx.explode(rock.size);
-            addScore(40 * rock.size, rock.x, rock.y);
+            addScore(40 * rock.size, rock.x, rock.y, { shipId: b.shipId });
             const bits = rock.split();
             rocks.splice(r, 1);
             if (rocks.length + bits.length <= rockMax + 2) rocks.push(...bits);
             burst(rock.x, rock.y, "#ffb347", 14 + rock.size * 4, 200);
+            cutBullet(i);
+            hit = true;
+            break;
           }
+          if (b.pierce > 0) {
+            b.pierce -= 1;
+            continue;
+          }
+          cutBullet(i);
           hit = true;
           break;
         }
@@ -1774,13 +1927,13 @@ const Game = (() => {
       for (let e = enemies.length - 1; e >= 0; e--) {
         const en = enemies[e];
         if (dist2(b, en) < (b.r + en.r) * (b.r + en.r)) {
-          bullets.splice(i, 1);
+          cutBullet(i);
           const bd = b.dmg || 16;
           en.hp -= bd / 16;
           burst(b.x, b.y, "#ff4d9a", 5, 160);
           if (en.hp <= 0) {
             AudioFx.explode(2);
-            addScore(en.score || 120, en.x, en.y);
+            addScore(en.score || 120, en.x, en.y, { enemy: true, shipId: b.shipId });
             enemies.splice(e, 1);
             burst(en.x, en.y, "#c084fc", 16, 240);
             rumble(40, 0.2);
@@ -1794,13 +1947,13 @@ const Game = (() => {
       for (let k = bosses.length - 1; k >= 0; k--) {
         const boss = bosses[k];
         if (dist2(b, boss) < (b.r + boss.r) * (b.r + boss.r)) {
-          bullets.splice(i, 1);
+          cutBullet(i);
           const bd = b.dmg || 16;
           boss.hp = Math.max(0, boss.hp - bd / 16);
           burst(b.x, b.y, boss.color, 8, 160);
           if (boss.hp <= 0) {
             AudioFx.explode(4);
-            addScore(boss.score, boss.x, boss.y);
+            addScore(boss.score, boss.x, boss.y, { boss: true, shipId: b.shipId });
             dropHeal(boss.x, boss.y);
             burst(boss.x, boss.y, boss.color, 28, 280);
             rumble(200, 0.7);
@@ -1895,6 +2048,7 @@ const Game = (() => {
       }
     }
     updateCombo(dt);
+    tickSurvivalShipPerks(dt);
 
     if (likeSurvival() && !megaEncounterActive()) {
       if (input.debugMegaOrbita) announceSurvivalMega("orbita");
@@ -1906,6 +2060,9 @@ const Game = (() => {
     }
 
     player.update(dt, input, w, h);
+    if (typeof EasterEggStars !== "undefined") {
+      EasterEggStars.update(dt, { likeSurvival, wave, player, w, h });
+    }
     const shot = tryShoot(input);
     if (mode === "link") {
       easeRemote(dt);
@@ -1928,7 +2085,11 @@ const Game = (() => {
         easeList(bosses, dt);
         easeList(powers, dt);
         bullets.forEach((b) => b.update(dt, w, h));
-        bullets = bullets.filter((b) => b.life > 0 && b.x > -40 && b.x < w + 40 && b.y > -40 && b.y < h + 40);
+        pruneLive(
+          bullets,
+          (b) => b.life > 0 && b.x > -40 && b.x < w + 40 && b.y > -40 && b.y < h + 40,
+          (b) => BulletPool.release(b)
+        );
         powers = powers.filter((p) => p.life > 0);
         shake *= 0.88;
         if (player.hp <= 0) {
@@ -1946,12 +2107,25 @@ const Game = (() => {
     bosses.forEach((b) => b.update(dt, w, h, pilotTarget(b), bullets));
     tickMegaBossEncounter(dt);
     bossDrones.forEach((d) => d.update(dt, w, h, player, megaBoss));
+    for (let di = bossDrones.length - 1; di >= 0; di--) {
+      const dr = bossDrones[di];
+      if (!dr.spent) continue;
+      if (dr.kind === "repair" && dr.delivered) {
+        burst(dr.x, dr.y, "#7dff9a", 16, 240);
+        AudioFx.heal();
+      }
+      bossDrones.splice(di, 1);
+    }
     bullets.forEach((b) => b.update(dt, w, h));
     particles.forEach((p) => p.update(dt));
     powers.forEach((p) => p.update(dt));
 
-    bullets = bullets.filter((b) => b.life > 0 && b.x > -40 && b.x < w + 40 && b.y > -40 && b.y < h + 40);
-    particles = particles.filter((p) => p.life > 0);
+    pruneLive(
+      bullets,
+      (b) => b.life > 0 && b.x > -40 && b.x < w + 40 && b.y > -40 && b.y < h + 40,
+      (b) => BulletPool.release(b)
+    );
+    pruneLive(particles, (p) => p.life > 0, (p) => ParticlePool.release(p));
     powers = powers.filter((p) => p.life > 0);
 
     collide();
@@ -1999,15 +2173,23 @@ const Game = (() => {
             ? `NÚCLEO EXPOSTO ${vLeft.toFixed(1)}s · F${ph}`
             : `FASE ${ph} — destrua os vitals`;
       } else {
-        els.objective.textContent = bosses.length
-          ? `BOSS: ${bosses[0].name}`
-          : `PRESSÃO ${(1 + wave * 0.045 + elapsed * 0.0055).toFixed(1)} · + cura · surtos`;
+        const eggObj =
+          typeof EasterEggStars !== "undefined" ? EasterEggStars.objectiveOverride() : null;
+        els.objective.textContent =
+          eggObj ||
+          (bosses.length
+            ? `BOSS: ${bosses[0].name}`
+            : `PRESSÃO ${(1 + wave * 0.045 + elapsed * 0.0055).toFixed(1)} · + cura · surtos`);
       }
     }
     els.pad.textContent = Input.status();
     if (megaBoss && (bossState === "INTRO" || bossState === "FIGHT" || bossState === "OUTRO")) {
       if (els.bossHud) els.bossHud.classList.add("hidden");
       if (els.bossHudMega) els.bossHudMega.classList.remove("hidden");
+      if (els.bossMegaTitle) {
+        const sub = megaBoss.displaySubtitle ? ` — ${megaBoss.displaySubtitle.toUpperCase()}` : "";
+        els.bossMegaTitle.textContent = `${megaBoss.name || "MEGA"}${sub}`;
+      }
       updateMegaBossHud();
     } else if (bosses[0]) {
       if (els.bossHud) els.bossHud.classList.remove("hidden");
@@ -2028,12 +2210,16 @@ const Game = (() => {
     const sy = shake ? rand(-shake, shake) : 0;
     ctx.translate(sx, sy);
 
+    const starSpd =
+      typeof EasterEggStars !== "undefined" ? EasterEggStars.starfieldSpeed() : 1;
+    const starStep = starSpd * 0.016;
     for (const st of stars) {
       ctx.fillStyle = `rgba(200,220,255,${0.25 + st.z * 0.5})`;
       ctx.fillRect(st.x, st.y, st.s, st.s);
-      st.y += st.z * 12 * 0.016;
+      st.y += st.z * 12 * starStep;
       if (st.y > h) st.y = 0;
     }
+    if (typeof EasterEggStars !== "undefined") EasterEggStars.drawCollectibles(ctx);
 
     rocks.forEach((r) => r.draw(ctx));
     enemies.forEach((e) => e.draw(ctx));
@@ -2062,6 +2248,7 @@ const Game = (() => {
       ctx.stroke();
       ctx.restore();
     }
+    if (typeof EasterEggStars !== "undefined") EasterEggStars.drawCelebration(ctx, w, h);
   }
 
   function loop(t) {
@@ -2361,11 +2548,11 @@ const Game = (() => {
     els.bossName = document.getElementById("boss-name");
     els.bossHp = document.getElementById("boss-hp");
     els.bossHudMega = document.getElementById("boss-hud-mega");
+    els.bossMegaTitle = document.getElementById("boss-mega-title");
     els.wsLeftFill = document.getElementById("ws-left-fill");
     els.wsTopFill = document.getElementById("ws-top-fill");
     els.wsRightFill = document.getElementById("ws-right-fill");
     els.bossCoreFill = document.getElementById("boss-core-fill");
-    els.bossShieldOverlay = document.getElementById("boss-shield-overlay");
 
     Input.attach(canvas);
     Settings.bind();
@@ -2378,6 +2565,21 @@ const Game = (() => {
       window.visualViewport.addEventListener("scroll", resize);
     }
     bind();
+    if (typeof EasterEggStars !== "undefined") {
+      EasterEggStars.bind({
+        burst(x, y, color, n, speed) {
+          burst(x, y, color, n, speed);
+        },
+        flash(msg, ms) {
+          if (!els.flash) return;
+          els.flash.textContent = msg;
+          els.flash.style.opacity = "1";
+          setTimeout(() => {
+            els.flash.style.opacity = "0";
+          }, ms || 900);
+        },
+      });
+    }
     Net.on(onNet);
     refreshTitle();
     if (typeof Cloud !== "undefined") {

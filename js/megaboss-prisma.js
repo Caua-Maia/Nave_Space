@@ -18,11 +18,15 @@ class PrismaMega {
     this.triRadius = 92;
     this.r = this.triRadius + 24;
     this.vitalHitPad = 12;
-    this.coreHp = 360;
-    this.maxCoreHp = 360;
+    this.coreHp = 520;
+    this.maxCoreHp = 520;
     this.shieldActive = true;
     this.alive = true;
     this.score = 9200;
+    this.goalX = null;
+    this.goalY = null;
+    this.wanderWait = 0;
+    this.moveSpeed = 56;
     this.t = 0;
     this.pulseAngle = 0;
     this.vAngles = [-Math.PI / 2, (-Math.PI / 2) + (Math.PI * 2) / 3, (-Math.PI / 2) + ((Math.PI * 4) / 3)];
@@ -31,8 +35,8 @@ class PrismaMega {
       offsetX: Math.cos(a) * this.triRadius,
       offsetY: Math.sin(a) * this.triRadius,
       r: 20,
-      hp: 95,
-      maxHp: 95,
+      hp: 170,
+      maxHp: 170,
       alive: true,
       cannonAngle: a,
     }));
@@ -83,12 +87,39 @@ class PrismaMega {
     }
   }
 
+  pickWanderGoal(w, h) {
+    const m = this.r + 28;
+    this.goalX = rand(m, Math.max(m + 8, w - m));
+    this.goalY = rand(h * 0.16, h * 0.62);
+    this.wanderWait = rand(2.4, 4.6);
+  }
+
+  wander(dt, w, h) {
+    if (this.goalX == null) this.pickWanderGoal(w, h);
+    this.wanderWait -= dt;
+    const dx = this.goalX - this.x;
+    const dy = this.goalY - this.y;
+    const d = Math.hypot(dx, dy) || 1;
+    if (d < 22 || this.wanderWait <= 0) this.pickWanderGoal(w, h);
+    const speed = this.currentPattern === "SWEEP_FIRE" ? 36 : this.moveSpeed;
+    this.x += (dx / d) * speed * dt;
+    this.y += (dy / d) * speed * dt;
+    this.x = Math.max(this.r + 16, Math.min(w - this.r - 16, this.x));
+    this.y = Math.max(this.r + 18, Math.min(h * 0.68, this.y));
+  }
+
+  refreshSweepOrigin() {
+    const spot = this.weakSpots[this.sweepCanon];
+    if (!spot || !spot.alive) return;
+    this.sweepOrigin = this.getWeakSpotWorldPos(spot);
+  }
+
   updateIntro(dt, w, h) {
     if (!this.alive) return;
-    if (this.targetAnchorY == null) this.targetAnchorY = h * 0.14;
+    if (this.targetAnchorY == null) this.targetAnchorY = h * 0.22;
     this.introLerp = Math.min(1, this.introLerp + dt / 2.8);
     this.y = this.introStartY + (this.targetAnchorY - this.introStartY) * this.introLerp;
-    this.x = w * 0.5;
+    this.x = w * 0.5 + Math.sin(this.t * 0.55) * 36;
     this.spin += dt * 0.2;
     this.t += dt;
     this.pulseAngle += dt * 2.5;
@@ -127,8 +158,10 @@ class PrismaMega {
     this.pulseAngle += dt * 2.5;
     const spinRate = (0.22 + this.survivalPhase * 0.06) * (this.patternScale || 1);
     if (this.currentPattern !== "SWEEP_FIRE") this.spin += dt * spinRate;
-    this.x = w * 0.5;
-    this.y = Math.min(h * 0.2, Math.max(h * 0.1, this.y));
+    this.wander(dt, w, h);
+    if (this.currentPattern === "SWEEP_CHARGE" || this.currentPattern === "SWEEP_FIRE") {
+      this.refreshSweepOrigin();
+    }
     this.syncShieldFromWeakSpots();
 
     this.patternTimer -= dt;
@@ -174,7 +207,7 @@ class PrismaMega {
       const a = this.spin + spot.cannonAngle;
       for (let k = -1; k <= 1; k++) {
         const ang = a + k * 0.22;
-        bullets.push(new Bullet(p.x, p.y, ang, 240, false, "#ffb347", 12));
+        spawnPooledBullet(bullets, p.x, p.y, ang, 240, false, "#ffb347", 12);
       }
     }
     AudioFx.bossShootRing();

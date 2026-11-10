@@ -75,17 +75,22 @@ const SurvivalMega = (() => {
     return 1;
   }
 
-  function scaleBoss(boss, cycle) {
-    const m = 1 + Math.max(0, cycle) * 0.14;
+  function scaleBoss(boss, cycle, wave) {
+    const wv = Math.max(1, wave | 0);
+    const waveM = 1.28 + (wv - 1) * 0.05;
+    const cycleM = 1 + Math.max(0, cycle) * 0.1;
+    const m = waveM * cycleM;
     boss.maxCoreHp = Math.round(boss.maxCoreHp * m);
     boss.coreHp = boss.maxCoreHp;
+    if (boss.hpMax != null) boss.hpMax = boss.maxCoreHp;
+    if (boss.hpCurrent != null) boss.hpCurrent = boss.coreHp;
     boss.score = Math.round(boss.score * m);
-    boss.weakSpots.forEach((s) => {
+    (boss.weakSpots || []).forEach((s) => {
       const base = s.maxHp;
       s.maxHp = Math.round(base * m);
       s.hp = s.maxHp;
     });
-    boss.patternScale = 1 + cycle * 0.08;
+    boss.patternScale = 1 + cycle * 0.08 + wv * 0.012;
     boss.telegraphScale = telegraphMul();
   }
 
@@ -113,12 +118,12 @@ const SurvivalMega = (() => {
   }
 
   function anchorY(typeId, h) {
-    if (typeId === "prisma") return h * 0.14;
+    if (typeId === "prisma") return h * 0.28;
     if (typeId === "orbita") return h * 0.48;
     return h * 0.22;
   }
 
-  function createInstance(typeId, x, y, cycle, viewportW, viewportH) {
+  function createInstance(typeId, x, y, cycle, viewportW, viewportH, wave) {
     const tid = CATALOG[typeId] && CATALOG[typeId].implemented ? typeId : "titan";
     let boss;
     if (tid === "prisma" && typeof PrismaMega !== "undefined") {
@@ -131,7 +136,7 @@ const SurvivalMega = (() => {
     }
     applyProfile(boss, tid);
     boss.survivalPhase = 1;
-    scaleBoss(boss, cycle);
+    scaleBoss(boss, cycle, wave);
     if (viewportH != null && viewportH > 0) boss.targetAnchorY = anchorY(tid, viewportH);
     return boss;
   }
@@ -196,6 +201,7 @@ const SurvivalMega = (() => {
     ROTATION,
     def,
     pickType,
+    scaleBoss,
     createInstance,
     startEncounter,
     onAllVitalsDown,
