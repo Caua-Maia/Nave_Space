@@ -4,6 +4,7 @@ const Game = (() => {
   let last = 0;
   let player;
   let bullets = [];
+  let heartShots = [];
   let rocks = [];
   let enemies = [];
   let bosses = [];
@@ -54,6 +55,7 @@ const Game = (() => {
   let comboGraceLeft = 0;
   let comboWasLocked = false;
   let spawningEnabled = true;
+  let emillyWasOn = false;
   let worldSeq = 1;
   const els = {};
 
@@ -495,8 +497,12 @@ const Game = (() => {
     return megaBoss && (bossState === "INTRO" || bossState === "FIGHT" || bossState === "OUTRO");
   }
 
+  function emillyLove() {
+    return typeof EasterEggStars !== "undefined" && EasterEggStars.isEmillyBuffActive();
+  }
+
   function comboLocked() {
-    return megaEncounterActive() || comboGraceLeft > 0;
+    return megaEncounterActive() || comboGraceLeft > 0 || emillyLove();
   }
 
   function comboTimerMax() {
@@ -587,6 +593,8 @@ const Game = (() => {
   function resetArena() {
     player = new Player(w * 0.5, h * 0.5, selectedShipId);
     bullets = [];
+    heartShots = [];
+    emillyWasOn = false;
     rocks = [];
     enemies = [];
     bosses = [];
@@ -1226,9 +1234,12 @@ const Game = (() => {
       const spd = surv ? surv.rockSpeed * (0.9 + Math.random() * 0.25) : 36 + Math.min(wave, 12) * 5;
       rocks.push(new Asteroid(p.x, p.y, size, Math.cos(toward) * spd, Math.sin(toward) * spd));
     }
+    const love = emillyLove();
+    const enemyCap = love ? Math.min(22, enemyMax + 10) : enemyMax;
+    const enemyWait = love ? Math.min(enemyRate, 0.48) : enemyRate;
     const enemyStart = mode === "story" && Story.get(stageId).type === "boss" ? 1.2 : 7;
-    if (elapsed > enemyStart && spawnEnemy <= 0 && enemies.length < enemyMax) {
-      spawnEnemy = enemyRate * (0.9 + Math.random() * 0.2);
+    if ((love || elapsed > enemyStart) && spawnEnemy <= 0 && enemies.length < enemyCap) {
+      spawnEnemy = enemyWait * (0.9 + Math.random() * 0.2);
       const p = spawnEdge(w, h);
       const type = pickEnemyType(surv ? surv.scale : 1 + elapsed * 0.012);
       enemies.push(new Enemy(p.x, p.y, type, surv ? surv.scale : 1));
@@ -1291,24 +1302,11 @@ const Game = (() => {
   }
 
   function shotAnglesFor(ship, aim, dualBack) {
-    if (dualBack || (ship.multi > 0 && ship.shipId === "dardo")) {
-      return [aim, aim + Math.PI];
-    }
-    if (ship.multi > 0 && ship.shipId === "lanca") {
-      const tight = 0.035;
-      return [aim - tight, aim, aim + tight];
-    }
-    if (ship.multi > 0 && ship.shipId === "bastiao") {
-      const n = 7;
-      const span = 1.12;
-      const out = [];
-      for (let i = 0; i < n; i++) out.push(aim + (i - (n - 1) / 2) * (span / (n - 1)));
-      return out;
-    }
-    if (ship.shipId === "bastiao" && ship.shots >= 2) {
-      const off = 0.42;
-      return [aim - off, aim + off];
-    }
+    if (dualBack) return [aim, aim + Math.PI];
+    if (ship.multi > 0 && ship.shipId === "dardo") return shotAnglesDardoMulti(aim);
+    if (ship.multi > 0 && ship.shipId === "lanca") return shotAnglesLancaMulti(aim);
+    if (ship.multi > 0 && ship.shipId === "bastiao") return shotAnglesBastiaoMulti(aim);
+    if (ship.shipId === "bastiao" && ship.shots >= 2) return [aim, aim];
     let n = ship.shots;
     const spread = ship.spread || 0.18;
     const out = [];
@@ -1320,22 +1318,11 @@ const Game = (() => {
 
   function anglesFromShotMsg(msg, ship, aim) {
     const mode = msg.multiMode | 0;
-    if (msg.dual || mode === 1) return [aim, aim + Math.PI];
-    if (mode === 2) {
-      const tight = 0.035;
-      return [aim - tight, aim, aim + tight];
-    }
-    if (mode === 3) {
-      const n = 7;
-      const span = 1.12;
-      const out = [];
-      for (let i = 0; i < n; i++) out.push(aim + (i - (n - 1) / 2) * (span / (n - 1)));
-      return out;
-    }
-    if (ship.shipId === "bastiao" && (msg.n | 0) === 2) {
-      const off = 0.42;
-      return [aim - off, aim + off];
-    }
+    if (msg.dual && mode !== 1) return [aim, aim + Math.PI];
+    if (mode === 1) return shotAnglesDardoMulti(aim);
+    if (mode === 2) return shotAnglesLancaMulti(aim);
+    if (mode === 3) return shotAnglesBastiaoMulti(aim);
+    if (ship.shipId === "bastiao" && (msg.n | 0) === 2 && mode === 0) return [aim, aim];
     const n = Math.max(1, Math.min(8, msg.n | 0));
     if (n > 1) {
       const spread = Number(msg.spread) || 0;
@@ -1348,13 +1335,92 @@ const Game = (() => {
 
   function bulletDmgForShip(ship, baseDmg, angleIndex, angleCount) {
     let dmg = baseDmg;
-    if (ship.multi > 0 && ship.shipId === "lanca" && angleCount === 3 && angleIndex === 1) {
-      dmg = Math.round(baseDmg * 1.22);
+    if (ship.multi > 0 && ship.shipId === "lanca" && angleCount >= 7) {
+      if (angleIndex === 1) dmg = Math.round(baseDmg * 1.2);
+      else if (angleIndex >= 3) dmg = Math.max(1, Math.round(baseDmg * 0.88));
     }
-    if (ship.multi > 0 && ship.shipId === "bastiao" && angleCount === 7) {
-      dmg = Math.max(1, Math.round(baseDmg * 0.52));
+    if (ship.multi > 0 && ship.shipId === "bastiao" && angleCount >= 8 && angleIndex >= 2) {
+      dmg = Math.max(1, Math.round(baseDmg * 0.58));
+    }
+    if (ship.multi > 0 && ship.shipId === "dardo" && angleCount === 4) {
+      dmg = Math.max(1, Math.round(baseDmg * 0.7));
     }
     return dmg;
+  }
+
+  function lancaHomingTarget(b) {
+    let best = null;
+    let bestD2 = 1e18;
+    for (let e = 0; e < enemies.length; e++) {
+      const en = enemies[e];
+      const d2 = dist2(b, en);
+      if (d2 < bestD2) {
+        bestD2 = d2;
+        best = en;
+      }
+    }
+    if (!best) {
+      for (let r = 0; r < rocks.length; r++) {
+        const rock = rocks[r];
+        const d2 = dist2(b, rock);
+        if (d2 < bestD2) {
+          bestD2 = d2;
+          best = rock;
+        }
+      }
+    }
+    return best;
+  }
+
+  function steerLancaHomingBullets(dt) {
+    for (let i = 0; i < bullets.length; i++) {
+      const b = bullets[i];
+      if (!b.fromPlayer || !b.lancaDuplicated || b.lancaHomingLeft <= 0) continue;
+      b.lancaHomingLeft -= dt;
+      const spd = b.lancaSpeed || Math.hypot(b.vx, b.vy) || 640;
+      const best = lancaHomingTarget(b);
+      if (best) {
+        const dx = best.x - b.x;
+        const dy = best.y - b.y;
+        const want = Math.atan2(dy, dx);
+        let cur = Math.atan2(b.vy, b.vx);
+        let da = want - cur;
+        while (da > Math.PI) da -= TAU;
+        while (da < -Math.PI) da += TAU;
+        const turn = Math.min(Math.abs(da), 18 * dt) * (da < 0 ? -1 : 1);
+        cur += turn;
+        b.vx = Math.cos(cur) * spd;
+        b.vy = Math.sin(cur) * spd;
+      }
+    }
+  }
+
+  function lancaDuplicateOnHit(b, hitEnemy) {
+    if (hitEnemy) markId(hitEnemy);
+    const spd = Math.hypot(b.vx, b.vy) || b.lancaSpeed || 640;
+    const ang = Math.atan2(b.vy, b.vx);
+    const dup = spawnPooledBullet(bullets, b.x, b.y, ang, spd, true, b.color, 0);
+    dup.ghost = true;
+    dup.shipId = "lanca";
+    dup.life = 0.42;
+    dup.r = b.r * 1.08;
+    b.lancaFromShip = false;
+    b.lancaDuplicated = true;
+    b.lancaHomingLeft = LANCA_CHAIN_HOMING_SEC;
+    b.lancaSpeed = spd;
+    b.lancaHomingNid = 0;
+    if (hitEnemy) {
+      b.lancaIgnoreNid = hitEnemy.nid;
+      b.lancaIgnoreT = 0.28;
+    } else {
+      b.lancaIgnoreNid = 0;
+      b.lancaIgnoreT = 0;
+    }
+    b.life = Math.max(b.life, 2.85);
+    b.r = Math.max(b.r, 3.6);
+    b.pierce = 0;
+    burst(b.x, b.y, "#4de8ff", 12, 240);
+    burst(b.x, b.y, "#ffffff", 4, 160);
   }
 
   function spawnBulletsFor(ship, x, y, aim, owner, msg) {
@@ -1365,20 +1431,33 @@ const Game = (() => {
     const pe = shipPerks(ship.shipId);
     angles.forEach((a, idx) => {
       const dmg = bulletDmgForShip(ship, baseDmg, idx, angles.length);
-      const b = spawnPooledBullet(
-        bullets,
-        x + Math.cos(a) * 18,
-        y + Math.sin(a) * 18,
-        a,
-        ship.bulletSpeed,
-        true,
-        tint,
-        dmg
-      );
+      let sx = x;
+      let sy = y;
+      const bastiaoTwin =
+        ship.shipId === "bastiao" &&
+        ((angles.length === 2 && Math.abs(angles[0] - angles[1]) < 1e-6) ||
+          (withMulti && angles.length >= 8 && idx < 2));
+      if (bastiaoTwin) {
+        const lane = idx === 0 ? -7 : 7;
+        sx += Math.cos(a + Math.PI / 2) * lane;
+        sy += Math.sin(a + Math.PI / 2) * lane;
+      } else {
+        sx += Math.cos(a) * 18;
+        sy += Math.sin(a) * 18;
+      }
+      const b = spawnPooledBullet(bullets, sx, sy, a, ship.bulletSpeed, true, tint, dmg);
       b.shipId = ship.shipId;
       if (ship.shipId === "dardo") b.r = 2.2;
       if (ship.shipId === "bastiao") b.r = withMulti && angles.length > 3 ? 3.6 : 4.4;
-      if (ship.shipId === "lanca" && !withMulti && pe.pierceRocks) b.pierce = pe.pierceRocks;
+      if (ship.shipId === "lanca") {
+        const mainLancaShot = !withMulti || idx === 1;
+        if (mainLancaShot) {
+          if (pe.pierceRocks) b.pierce = pe.pierceRocks;
+          b.lancaFromShip = true;
+          b.lancaSpeed = ship.bulletSpeed;
+          b.r = 3.5;
+        }
+      }
       if (mode === "link") b.owner = owner;
     });
     return {
@@ -1958,6 +2037,12 @@ const Game = (() => {
             rocks.splice(r, 1);
             if (rocks.length + bits.length <= rockMax + 2) rocks.push(...bits);
             burst(rock.x, rock.y, "#ffb347", 14 + rock.size * 4, 200);
+            const chainRock = b.shipId === "lanca" && b.lancaFromShip && !b.lancaDuplicated;
+            if (chainRock) {
+              lancaDuplicateOnHit(b, null);
+              hit = true;
+              break;
+            }
             cutBullet(i);
             hit = true;
             break;
@@ -1975,8 +2060,9 @@ const Game = (() => {
       for (let e = enemies.length - 1; e >= 0; e--) {
         const en = enemies[e];
         if (dist2(b, en) < (b.r + en.r) * (b.r + en.r)) {
-          cutBullet(i);
+          if (b.lancaIgnoreT > 0 && b.lancaIgnoreNid === en.nid) continue;
           const bd = b.dmg || 16;
+          const chainNow = b.shipId === "lanca" && b.lancaFromShip && !b.lancaDuplicated;
           en.hp -= bd / 16;
           burst(b.x, b.y, "#ff4d9a", 5, 160);
           if (en.hp <= 0) {
@@ -1986,6 +2072,12 @@ const Game = (() => {
             burst(en.x, en.y, "#c084fc", 16, 240);
             rumble(40, 0.2);
           }
+          if (chainNow) {
+            lancaDuplicateOnHit(b, en);
+            hit = true;
+            break;
+          }
+          cutBullet(i);
           hit = true;
           break;
         }
@@ -2019,10 +2111,12 @@ const Game = (() => {
         if (dist2(rock, ship) < (rock.r * 0.85 + ship.r) * (rock.r * 0.85 + ship.r)) strike(ship, 16);
       });
     }
-    for (const en of enemies) {
-      bodyShips.forEach((ship) => {
-        if (dist2(en, ship) < (en.r + ship.r) * (en.r + ship.r)) strike(ship, 14);
-      });
+    if (!emillyLove()) {
+      for (const en of enemies) {
+        bodyShips.forEach((ship) => {
+          if (dist2(en, ship) < (en.r + ship.r) * (en.r + ship.r)) strike(ship, 14);
+        });
+      }
     }
     for (const boss of bosses) {
       bodyShips.forEach((ship) => {
@@ -2111,6 +2205,13 @@ const Game = (() => {
     if (typeof EasterEggStars !== "undefined") {
       EasterEggStars.update(dt, { likeSurvival, wave, player, w, h });
     }
+    const love = emillyLove();
+    if (love && !emillyWasOn) {
+      for (let i = bullets.length - 1; i >= 0; i--) {
+        if (!bullets[i].fromPlayer) cutBullet(i);
+      }
+    }
+    emillyWasOn = love;
     const shot = tryShoot(input);
     if (mode === "link") {
       easeRemote(dt);
@@ -2151,7 +2252,7 @@ const Game = (() => {
     if (mode !== "link" || linkHost()) spawnWaveStuff(dt);
 
     rocks.forEach((r) => r.update(dt, w, h));
-    enemies.forEach((e) => e.update(dt, w, h, pilotTarget(e), bullets));
+    enemies.forEach((e) => e.update(dt, w, h, pilotTarget(e), bullets, emillyLove() ? heartShots : null));
     bosses.forEach((b) => b.update(dt, w, h, pilotTarget(b), bullets));
     tickMegaBossEncounter(dt);
     bossDrones.forEach((d) => d.update(dt, w, h, player, megaBoss));
@@ -2164,7 +2265,9 @@ const Game = (() => {
       }
       bossDrones.splice(di, 1);
     }
+    steerLancaHomingBullets(dt);
     bullets.forEach((b) => b.update(dt, w, h));
+    heartShots.forEach((h) => h.update(dt));
     particles.forEach((p) => p.update(dt));
     powers.forEach((p) => p.update(dt));
 
@@ -2174,6 +2277,7 @@ const Game = (() => {
       (b) => BulletPool.release(b)
     );
     pruneLive(particles, (p) => p.life > 0, (p) => ParticlePool.release(p));
+    heartShots = heartShots.filter((h) => h.life > 0 && h.x > -80 && h.x < w + 80 && h.y > -80 && h.y < h + 80);
     powers = powers.filter((p) => p.life > 0);
 
     collide();
@@ -2276,6 +2380,7 @@ const Game = (() => {
     bossDrones.forEach((d) => d.draw(ctx));
     powers.forEach((p) => p.draw(ctx));
     bullets.forEach((b) => b.draw(ctx));
+    heartShots.forEach((h) => h.draw(ctx));
     particles.forEach((p) => p.draw(ctx));
     if (remote && mode === "link" && (state === "play" || state === "pause")) {
       remote.draw(ctx);
