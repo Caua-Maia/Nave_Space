@@ -61,8 +61,34 @@ const Save = (() => {
     };
   }
 
+  function newPilotId() {
+    if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+      return crypto.randomUUID();
+    }
+    return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (ch) => {
+      const r = (Math.random() * 16) | 0;
+      const v = ch === "x" ? r : (r & 0x3) | 0x8;
+      return v.toString(16);
+    });
+  }
+
+  function normalizePilotId(value) {
+    const s = String(value || "")
+      .trim()
+      .toLowerCase();
+    if (/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(s)) return s;
+    return "";
+  }
+
+  function pilotTag(id) {
+    const s = normalizePilotId(id);
+    if (!s) return "";
+    return s.slice(-4).toUpperCase();
+  }
+
   function blank() {
     return {
+      pilotId: newPilotId(),
       name: "",
       shipId: "lanca",
       story: { nextStage: 1, campaignScore: 0, cleared: 0 },
@@ -70,6 +96,21 @@ const Save = (() => {
       storyBoard: [],
       session: null,
       options: defaultOptions(),
+    };
+  }
+
+  function packFromRaw(data) {
+    const base = blank();
+    const src = data && typeof data === "object" ? data : {};
+    return {
+      pilotId: normalizePilotId(src.pilotId) || newPilotId(),
+      name: typeof src.name === "string" ? src.name.slice(0, 16) : "",
+      shipId: src.shipId === "dardo" || src.shipId === "bastiao" ? src.shipId : "lanca",
+      story: { ...base.story, ...(src.story || {}) },
+      survivalBoard: Array.isArray(src.survivalBoard) ? src.survivalBoard : [],
+      storyBoard: Array.isArray(src.storyBoard) ? src.storyBoard : [],
+      session: src.session && src.session.v === 2 ? src.session : null,
+      options: mergeOptions(src.options),
     };
   }
 
@@ -81,16 +122,10 @@ const Save = (() => {
       }
       if (!raw) return blank();
       const data = JSON.parse(raw);
-      const base = blank();
-      return {
-        name: typeof data.name === "string" ? data.name.slice(0, 16) : "",
-        shipId: data.shipId === "dardo" || data.shipId === "bastiao" ? data.shipId : "lanca",
-        story: { ...base.story, ...(data.story || {}) },
-        survivalBoard: Array.isArray(data.survivalBoard) ? data.survivalBoard : [],
-        storyBoard: Array.isArray(data.storyBoard) ? data.storyBoard : [],
-        session: data.session && data.session.v === 2 ? data.session : null,
-        options: mergeOptions(data.options),
-      };
+      const hadPilotId = !!normalizePilotId(data.pilotId);
+      const packed = packFromRaw(data);
+      if (!hadPilotId) write(packed);
+      return packed;
     } catch {
       return blank();
     }
@@ -142,6 +177,7 @@ const Save = (() => {
     const data = load();
     const list = kind === "story" ? data.storyBoard : data.survivalBoard;
     list.push({
+      pilotId: normalizePilotId(entry.pilotId) || data.pilotId,
       name: (entry.name || data.name || "ANÔNIMO").slice(0, 16),
       score: entry.score | 0,
       extra: entry.extra || "",
@@ -163,5 +199,22 @@ const Save = (() => {
     return data.options;
   }
 
-  return { load, setName, setShip, setOptions, defaultOptions, saveStory, saveSession, clearSession, hasSession, pushBoard };
+  function getPilotId() {
+    return load().pilotId;
+  }
+
+  return {
+    load,
+    getPilotId,
+    pilotTag,
+    setName,
+    setShip,
+    setOptions,
+    defaultOptions,
+    saveStory,
+    saveSession,
+    clearSession,
+    hasSession,
+    pushBoard,
+  };
 })();
