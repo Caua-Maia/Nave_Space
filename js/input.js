@@ -5,6 +5,9 @@ const Input = (() => {
   let padName = "";
   let padMapping = "";
   const prevButtons = {};
+  let fireAllowed = true;
+  let suppressFireUntil = 0;
+  let boundCanvas = null;
 
   // Gamepad / WASD: zona morta ~0,18. O limiar do analógico direito de tiro no celular fica em touch.js (TOUCH_FIRE_DEAD).
   const DEAD = 0.18;
@@ -109,8 +112,9 @@ const Input = (() => {
             ? { x: touch.left.x, y: touch.left.y, mag: touch.left.mag }
             : kbMove;
 
-    const touchAimFire = !!(touch && touch.mode && touch.shoot);
-    const kbShoot = touchAimFire || mouse.down || keys.has("Space") || keys.has("KeyJ");
+    const gated = fireOpen();
+    const touchAimFire = gated && !!(touch && touch.mode && touch.shoot);
+    const kbShoot = gated && (touchAimFire || mouse.down || keys.has("Space") || keys.has("KeyJ"));
     const pausePressed = justPressed(
       "pause",
       keys.has("Escape") || keys.has("KeyP") || !!(pad && pad.start) || !!(touch && touch.pausePressed)
@@ -138,7 +142,41 @@ const Input = (() => {
     };
   }
 
+  function fireOpen() {
+    return fireAllowed && (typeof performance === "undefined" || performance.now() >= suppressFireUntil);
+  }
+
+  function mapClientToCanvas(clientX, clientY) {
+    const canvas = boundCanvas;
+    if (!canvas) return { x: clientX, y: clientY };
+    const r = canvas.getBoundingClientRect();
+    const rw = r.width || 1;
+    const rh = r.height || 1;
+    return {
+      x: ((clientX - r.left) / rw) * canvas.width,
+      y: ((clientY - r.top) / rh) * canvas.height,
+    };
+  }
+
+  function clearPointerFire() {
+    mouse.down = false;
+  }
+
+  function setFireAllowed(on) {
+    fireAllowed = !!on;
+    if (!fireAllowed) {
+      mouse.down = false;
+      keys.delete("Space");
+      keys.delete("KeyJ");
+      suppressFireUntil = 0;
+      return;
+    }
+    suppressFireUntil = (typeof performance !== "undefined" ? performance.now() : 0) + 220;
+    mouse.down = false;
+  }
+
   function attach(canvas) {
+    boundCanvas = canvas;
     window.addEventListener("keydown", (e) => {
       keys.add(e.code);
       if (["Space", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(e.code)) {
@@ -147,16 +185,32 @@ const Input = (() => {
     });
     window.addEventListener("keyup", (e) => keys.delete(e.code));
     canvas.addEventListener("mousemove", (e) => {
-      const r = canvas.getBoundingClientRect();
-      mouse.x = ((e.clientX - r.left) / r.width) * canvas.width;
-      mouse.y = ((e.clientY - r.top) / r.height) * canvas.height;
+      const p = mapClientToCanvas(e.clientX, e.clientY);
+      mouse.x = p.x;
+      mouse.y = p.y;
       mouse.inside = true;
     });
-    canvas.addEventListener("mousedown", () => {
+    canvas.addEventListener("mousedown", (e) => {
+      if (e.button !== 0) return;
+      if (e.target !== canvas) return;
+      if (!fireOpen()) return;
+      e.stopPropagation();
       mouse.down = true;
+    });
+    canvas.addEventListener("pointerdown", (e) => {
+      if (e.pointerType === "mouse" && e.button !== 0) return;
+      if (e.target !== canvas) return;
+      if (!fireOpen()) {
+        e.preventDefault();
+        e.stopPropagation();
+        return;
+      }
     });
     window.addEventListener("mouseup", () => {
       mouse.down = false;
+    });
+    window.addEventListener("pointerup", () => {
+      if (!fireOpen()) mouse.down = false;
     });
     window.addEventListener("gamepadconnected", (e) => {
       padIndex = e.gamepad.index;
@@ -172,6 +226,9 @@ const Input = (() => {
   return {
     attach,
     snapshot,
+    setFireAllowed,
+    clearPointerFire,
+    mapClientToCanvas,
     status() {
       const desktop =
         typeof Platform !== "undefined" ? Platform.isDesktop() : document.body && document.body.dataset.platform === "desktop";

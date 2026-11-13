@@ -4,6 +4,8 @@
   let canvas, ctx, w, h;
   let state = "menu";
   let last = 0;
+  let rafId = 0;
+  let menuPollTimer = 0;
   let player;
   let bullets = [];
   let heartShots = [];
@@ -154,13 +156,46 @@
     }
   }
 
+  function overlayOpen() {
+    return !!(els.overlay && !els.overlay.classList.contains("hidden"));
+  }
+
+  function loopFrozen() {
+    return state === "pause" || state === "dead" || state === "clear" || state === "win";
+  }
+
+  function gameplayFireAllowed() {
+    return state === "play" && !overlayOpen();
+  }
+
   function syncMenuPointer() {
     if (!canvas || !els.overlay) return;
-    const menuOpen = !els.overlay.classList.contains("hidden");
-    canvas.style.pointerEvents = menuOpen ? "none" : "auto";
+    const menuOpen = overlayOpen();
+    canvas.style.pointerEvents = menuOpen || state !== "play" ? "none" : "auto";
+    if (typeof Input !== "undefined" && Input.setFireAllowed) {
+      Input.setFireAllowed(gameplayFireAllowed());
+    }
+    if (menuOpen && typeof Input !== "undefined" && Input.clearPointerFire) Input.clearPointerFire();
     if (typeof TouchControls !== "undefined") {
       TouchControls.setVisible(!menuOpen && state === "play");
     }
+    armLoop();
+  }
+
+  function guardUiEvent(event) {
+    event.stopPropagation();
+    if (typeof Input !== "undefined" && Input.clearPointerFire) Input.clearPointerFire();
+  }
+
+  function bindUiShield() {
+    if (!els.overlay) return;
+    ["pointerdown", "mousedown", "touchstart", "click"].forEach((type) => {
+      els.overlay.addEventListener(type, guardUiEvent, true);
+    });
+    els.overlay.querySelectorAll("button").forEach((btn) => {
+      btn.addEventListener("pointerdown", guardUiEvent);
+      btn.addEventListener("click", (event) => event.stopPropagation());
+    });
   }
 
   function showView(name) {
@@ -1574,6 +1609,7 @@
   }
 
   function tryShoot(input) {
+    if (!gameplayFireAllowed()) return;
     let aimX = 0;
     let aimY = 0;
     let want = false;
@@ -2293,8 +2329,7 @@
     return `${m}:${String(s).padStart(2, "0")}`;
   }
 
-  function update(dt, input) {
-    if (state === "menu" || state === "brief" || state === "ranks" || state === "ships" || state === "link" || state === "link-lobby") return;
+  function handleOverlayInput(input) {
     if ((state === "dead" || state === "clear" || state === "win") && input.confirmPressed && !typing()) {
       if (state === "dead") document.getElementById("btn-retry").click();
       else if (state === "clear") document.getElementById("btn-next").click();
@@ -2303,6 +2338,11 @@
       if (state === "play" || state === "pause") pauseToggle();
     }
     if (state === "pause" && input.confirmPressed && !typing()) pauseToggle();
+  }
+
+  function update(dt, input) {
+    if (state === "menu" || state === "brief" || state === "ranks" || state === "ships" || state === "link" || state === "link-lobby") return;
+    handleOverlayInput(input);
     if (state !== "play") return;
 
     elapsed += dt;
@@ -2533,20 +2573,58 @@
     if (typeof EasterEggStars !== "undefined") EasterEggStars.drawCelebration(ctx, w, h);
   }
 
+  function stopMenuPoll() {
+    if (!menuPollTimer) return;
+    clearInterval(menuPollTimer);
+    menuPollTimer = 0;
+  }
+
+  function pollFrozenInput() {
+    const input = Input.snapshot();
+    if (state === "menu" && els.menuPad) els.menuPad.textContent = Input.status();
+    handleOverlayInput(input);
+    if (!loopFrozen()) armLoop();
+  }
+
+  function armLoop() {
+    if (loopFrozen()) {
+      if (rafId) {
+        cancelAnimationFrame(rafId);
+        rafId = 0;
+      }
+      last = 0;
+      draw();
+      if (!menuPollTimer) menuPollTimer = setInterval(pollFrozenInput, 16);
+      return;
+    }
+    stopMenuPoll();
+    if (!rafId) rafId = requestAnimationFrame(loop);
+  }
+
   function loop(t) {
+    rafId = requestAnimationFrame(loop);
+    if (loopFrozen()) {
+      cancelAnimationFrame(rafId);
+      rafId = 0;
+      armLoop();
+      return;
+    }
     const dt = Math.min(0.033, (t - last) / 1000 || 0.016);
     last = t;
     if (hitStopLeft > 0) {
       hitStopLeft = Math.max(0, hitStopLeft - dt);
       draw();
-      requestAnimationFrame(loop);
       return;
     }
     const input = Input.snapshot();
     if (state === "menu" && els.menuPad) els.menuPad.textContent = Input.status();
     update(dt, input);
     draw();
-    requestAnimationFrame(loop);
+    if (loopFrozen()) {
+      cancelAnimationFrame(rafId);
+      rafId = 0;
+      armLoop();
+    }
   }
 
   function readViewport() {
@@ -2648,6 +2726,7 @@
   }
 
   function bind() {
+    bindUiShield();
     els.btnLink.addEventListener("click", openLink);
     els.btnLinkHost.addEventListener("click", createRoom);
     els.btnLinkJoin.addEventListener("click", enterRoom);
@@ -2897,7 +2976,7 @@
       showView("splash");
     }
     syncMenuPointer();
-    requestAnimationFrame(loop);
+    armLoop();
   }
 
   return { init };

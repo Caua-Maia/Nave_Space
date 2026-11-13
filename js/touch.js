@@ -2,6 +2,8 @@ const TouchControls = (() => {
   const DEAD_MOVE = 0.18;
   /** Direito: entre 0,18 e 0,22 — evita tiro só por encostar o polegar. */
   const DEAD_FIRE = 0.2;
+  const LERP_MOVE = 0.55;
+  const LERP_AIM = 0.38;
   const zero = { x: 0, y: 0, mag: 0 };
   const axes = { left: { ...zero }, right: { ...zero }, shoot: false };
   const pointers = { left: null, right: null };
@@ -43,15 +45,31 @@ const TouchControls = (() => {
     placeKnob(which, 0, 0, 0);
   }
 
+  function cssPoint(event) {
+    const x = event.clientX;
+    const y = event.clientY;
+    return { x: x, y: y };
+  }
+
+  function blendStick(which, next) {
+    const k = which === "right" ? LERP_AIM : LERP_MOVE;
+    const prev = axes[which] || zero;
+    const x = prev.x + (next.x - prev.x) * k;
+    const y = prev.y + (next.y - prev.y) * k;
+    const mag = Math.min(1, Math.hypot(x, y));
+    axes[which] = mag < 0.02 ? { x: 0, y: 0, mag: 0 } : { x, y, mag };
+  }
+
   function updateStick(which, event) {
     const el = baseOf(which);
     if (!el) return;
     const rect = el.getBoundingClientRect();
+    const pt = cssPoint(event);
     const cx = rect.left + rect.width / 2;
     const cy = rect.top + rect.height / 2;
     const max = rect.width / 2;
-    const dx = event.clientX - cx;
-    const dy = event.clientY - cy;
+    const dx = pt.x - cx;
+    const dy = pt.y - cy;
     const dist = Math.hypot(dx, dy) || 1;
     const clamped = Math.min(dist, max);
     const nx = dx / dist;
@@ -60,10 +78,10 @@ const TouchControls = (() => {
     const raw = clamped / max;
     const dead = which === "right" ? DEAD_FIRE : DEAD_MOVE;
     if (raw < dead) {
-      axes[which] = { x: 0, y: 0, mag: 0 };
+      blendStick(which, { x: 0, y: 0, mag: 0 });
     } else {
       const t = Math.min(1, (raw - dead) / (1 - dead));
-      axes[which] = { x: nx * t, y: ny * t, mag: t };
+      blendStick(which, { x: nx * t, y: ny * t, mag: t });
     }
     if (which === "right") axes.shoot = raw >= DEAD_FIRE;
     const base = baseOf(which);
@@ -77,8 +95,9 @@ const TouchControls = (() => {
   }
 
   function vectorFrom(which, event, originX, originY, max) {
-    const dx = event.clientX - originX;
-    const dy = event.clientY - originY;
+    const pt = cssPoint(event);
+    const dx = pt.x - originX;
+    const dy = pt.y - originY;
     const dist = Math.hypot(dx, dy) || 1;
     const clamped = Math.min(dist, max);
     const nx = dx / dist;
@@ -86,10 +105,10 @@ const TouchControls = (() => {
     const raw = clamped / max;
     const dead = which === "right" ? DEAD_FIRE : DEAD_MOVE;
     if (raw < dead) {
-      axes[which] = { x: 0, y: 0, mag: 0 };
+      blendStick(which, { x: 0, y: 0, mag: 0 });
     } else {
       const t = Math.min(1, (raw - dead) / (1 - dead));
-      axes[which] = { x: nx * t, y: ny * t, mag: t };
+      blendStick(which, { x: nx * t, y: ny * t, mag: t });
     }
     if (which === "right") axes.shoot = raw >= DEAD_FIRE;
     if (touchMode() === "follow") placeKnob(which, nx, ny, clamped);
@@ -184,7 +203,15 @@ const TouchControls = (() => {
       '<div class="stick right" data-stick="right" data-layout="stickR" data-label="Mirar" role="slider" aria-label="Mirar" aria-valuemin="0" aria-valuemax="1" aria-valuenow="0"><div class="knob"></div></div>';
     host.appendChild(root);
     root.querySelectorAll(".stick").forEach(bindStick);
-    root.querySelector("#touch-pause").addEventListener("click", () => {
+    const pauseBtn = root.querySelector("#touch-pause");
+    pauseBtn.addEventListener("pointerdown", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      if (typeof Input !== "undefined") Input.clearPointerFire();
+    });
+    pauseBtn.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
       if (document.body.classList.contains("hud-edit")) return;
       pauseEdge = true;
     });
@@ -201,7 +228,14 @@ const TouchControls = (() => {
     fsBtn.dataset.layout = "full";
     fsBtn.dataset.label = "Tela cheia";
     fsBtn.textContent = "TELA CHEIA";
-    fsBtn.addEventListener("click", toggleFullscreen);
+    fsBtn.addEventListener("pointerdown", (event) => {
+      event.stopPropagation();
+      if (typeof Input !== "undefined") Input.clearPointerFire();
+    });
+    fsBtn.addEventListener("click", (event) => {
+      event.stopPropagation();
+      toggleFullscreen();
+    });
     host.appendChild(fsBtn);
     const hint = document.createElement("p");
     hint.id = "fs-hint";
