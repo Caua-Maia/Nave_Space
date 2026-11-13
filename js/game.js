@@ -1202,6 +1202,7 @@
         if (megaBoss.survivalPhase != null) megaBoss.survivalPhase = SurvivalMega.getPhase();
       }
       megaBoss.updateFight(dt, w, h, player, bullets, remote);
+      tickVitalIframes(megaBoss.weakSpots || megaBoss.subCores, dt);
       if (typeof megaBoss.applyHazards === "function") megaBoss.applyHazards(dt, w, h, player, remote);
       else megaBoss.applyBeamDamage(dt, w, player, remote);
       const firing =
@@ -1275,25 +1276,26 @@
       const vitalRad = (spot) =>
         typeof megaBoss.vitalHitRadius === "function" ? megaBoss.vitalHitRadius(spot) : (spot.r || 18) + 16;
       const spots = megaBoss.weakSpots || [];
-      for (const spot of spots) {
-        if (!spot.alive) continue;
+      for (let s = spots.length - 1; s >= 0; s--) {
+        const spot = spots[s];
+        if (!spot || !spot.alive) continue;
         const pos = megaBoss.getWeakSpotWorldPos(spot);
         const vr = vitalRad(spot);
-        if (circleHitsBullet(b, pos.x, pos.y, vr)) {
-          cutBullet(i);
-          const dmg = megaBulletDamage(b);
-          spot.hp -= dmg;
-          burst(pos.x, pos.y, "#ffcc00", 8, 200);
-          AudioFx.hit();
-          if (spot.hp <= 0) {
-            spot.hp = 0;
-            spot.alive = false;
-            burst(pos.x, pos.y, "#ff3366", 18, 260);
-            AudioFx.explode(2);
-            addScore(500, pos.x, pos.y, { vital: true, shipId: b.shipId });
-          }
-          return true;
+        if (!circleHitsBullet(b, pos.x, pos.y, vr)) continue;
+        cutBullet(i);
+        if (!vitalAcceptsHit(spot)) return true;
+        markVitalHit(spot);
+        const dmg = megaBulletDamage(b);
+        applyVitalHp(spot, dmg);
+        burst(pos.x, pos.y, "#ffcc00", 8, 200);
+        AudioFx.hit();
+        if (spot.hp <= 0) {
+          spot.alive = false;
+          burst(pos.x, pos.y, "#ff3366", 18, 260);
+          AudioFx.explode(2);
+          addScore(500, pos.x, pos.y, { vital: true, shipId: b.shipId });
         }
+        return true;
       }
       const hullR =
         typeof megaBoss.bulletHullRadius === "function" ? megaBoss.bulletHullRadius() : megaBoss.r;
@@ -1436,6 +1438,14 @@
     if (ship.multi > 0 && ship.shipId === "dardo") return shotAnglesDardoMulti(aim);
     if (ship.multi > 0 && ship.shipId === "lanca") return shotAnglesLancaMulti(aim);
     if (ship.multi > 0 && ship.shipId === "bastiao") return shotAnglesBastiaoMulti(aim);
+    if (ship.shipId === "dardo") {
+      const deg = Number(ship.aimJitterDeg) || 0;
+      const jitter = deg ? ((Math.random() * 2 - 1) * deg * Math.PI) / 180 : 0;
+      return [aim + jitter];
+    }
+    if (ship.shipId === "bastiao") {
+      return shotgunFanAngles(aim, ship.shots || 5, ship.spread || 0.26);
+    }
     let n = ship.shots;
     const spread = ship.spread || 0.18;
     const out = [];
@@ -1554,7 +1564,7 @@
 
   function spawnBulletsFor(ship, x, y, aim, owner, msg) {
     const tint = ship.pilotColor || ship.color;
-    const baseDmg = ship.bulletDmg || 16;
+    const baseDmg = ship.bulletDmg || 10;
     const withMulti = msg ? (msg.multiMode | 0) > 0 : ship.multi > 0;
     const angles = msg ? anglesFromShotMsg(msg, ship, aim) : shotAnglesFor(ship, aim);
     const pe = shipPerks(ship.shipId);
@@ -1635,10 +1645,11 @@
     }
     if (Math.hypot(aimX, aimY) > 0.01) player.aim = Math.atan2(aimY, aimX);
     if (!want || player.cool > 0) return;
-    let gap = player.gap;
+    const rateMs = player.fireRateMs > 0 ? player.fireRateMs : Math.round((player.gap || 0.2) * 1000);
+    let gap = rateMs / 1000;
     if (player.rapid > 0) {
       const rapidScale = shipPerks(player.shipId).rapidGapScale;
-      gap = rapidScale ? player.gap * rapidScale : player.gap * 0.55;
+      gap = gap * (rapidScale > 0 ? rapidScale : 0.82);
     }
     player.cool = gap;
     const owner = mode === "link" && Net.role() === "guest" ? 1 : 0;
@@ -1655,7 +1666,7 @@
     const aim = Number(msg.aim) || 0;
     remote.shipId = spec.id;
     remote.bulletSpeed = Number(msg.speed) || spec.bulletSpeed;
-    remote.bulletDmg = spec.bulletDmg || 16;
+    remote.bulletDmg = spec.bulletDmg || 10;
     spawnBulletsFor(remote, x, y, aim, 1, msg);
   }
 

@@ -10,11 +10,10 @@ const BossFSM = {
   DEFEATED: "DEFEATED",
 };
 
-/** Equaliza DPS no megaboss (Lança = 1.00). Não altera dano em rochas/inimigos. */
 const MEGA_SHIP_DMG_MUL = {
   lanca: 1,
-  dardo: 0.5,
-  bastiao: 0.68,
+  dardo: 1,
+  bastiao: 1,
 };
 
 const TITAN_STAGGER = 1.5;
@@ -483,13 +482,15 @@ class MegaBoss {
   handlePlayerBullet(b, hooks) {
     if (!this.alive || !b || !b.fromPlayer) return false;
     const dmg = this.scaledDamage(b);
-    for (let i = 0; i < this.subCores.length; i++) {
+    for (let i = this.subCores.length - 1; i >= 0; i--) {
       const spot = this.subCores[i];
       if (!spot.alive) continue;
       const pos = this.getWeakSpotWorldPos(spot);
       const vr = this.vitalHitRadius(spot);
       if (!circleHitsBullet(b, pos.x, pos.y, vr)) continue;
-      spot.hp -= dmg;
+      if (!vitalAcceptsHit(spot)) return true;
+      markVitalHit(spot);
+      applyVitalHp(spot, dmg);
       this.noteAggro(b.owner, dmg);
       hooks.burst(pos.x, pos.y, "#ffcc00", 8, 200);
       AudioFx.hit();

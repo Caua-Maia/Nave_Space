@@ -21,6 +21,33 @@ function dist2(a, b) {
   return dx * dx + dy * dy;
 }
 
+/** ~80 ms: shotgun do Bastião só aplica 1 hit por vital por janela. */
+const VITAL_HIT_IFRAMES = 0.08;
+
+function tickVitalIframes(spots, dt) {
+  if (!spots || !spots.length) return;
+  for (let i = 0; i < spots.length; i++) {
+    const s = spots[i];
+    if (s && s.hitIframes > 0) s.hitIframes -= dt;
+  }
+}
+
+function vitalAcceptsHit(spot) {
+  return !!(spot && spot.alive && !(spot.hitIframes > 0));
+}
+
+function markVitalHit(spot) {
+  if (!spot) return;
+  spot.hitIframes = VITAL_HIT_IFRAMES;
+}
+
+function applyVitalHp(spot, dmg) {
+  const hp = Number(spot.hp);
+  const next = (Number.isFinite(hp) ? hp : 0) - Math.max(0, dmg | 0);
+  spot.hp = next > 0 ? next : 0;
+  return spot.hp;
+}
+
 /** Colisão círculo × bala (frame atual + segmento do movimento). */
 function circleHitsBullet(b, cx, cy, cr) {
   const br = b.r || 3;
@@ -828,13 +855,13 @@ const SHIP_PERKS = {
     scoreBossMul: 1.12,
     scoreFarmMul: 1.06,
     pierceRocks: 3,
-    rapidGapScale: 0.42,
+    rapidGapScale: 0.82,
   },
   bastiao: {
     comboGuardCd: 14,
     scoreVitalMul: 1.08,
     scoreBossMul: 1.1,
-    rapidGapScale: 0.46,
+    rapidGapScale: 0.82,
     shieldBonus: 2.5,
     scoreSurvivalInterval: 25,
     scoreSurvivalPoints: 38,
@@ -842,7 +869,7 @@ const SHIP_PERKS = {
   dardo: {
     incomingDmgMul: 2,
     scoreFarmMul: 1.1,
-    rapidGapScale: 0.38,
+    rapidGapScale: 0.82,
   },
 };
 
@@ -855,13 +882,9 @@ function comboKillsPerMult(shipId) {
   return p.comboKillsPerMult > 0 ? p.comboKillsPerMult : 4;
 }
 
-/** Dano em megaboss (Lança = 1.0). */
 function megaBulletDamage(bullet) {
-  const raw = Math.max(1, bullet.dmg || 16);
-  const id = bullet.shipId || "lanca";
-  const MUL = { lanca: 1, dardo: 0.5, bastiao: 0.68 };
-  const mul = MUL[id] != null ? MUL[id] : 1;
-  return Math.max(1, Math.round(raw * mul));
+  const raw = Math.max(1, bullet.dmg || 10);
+  return Math.max(1, Math.round(raw));
 }
 
 /** Ângulos locais (relativos à mira) para disparo no buff T — espelha o desenho vetorial. */
@@ -886,6 +909,17 @@ function shotAnglesLancaMulti(aim) {
   return out;
 }
 
+function shotgunFanAngles(aim, n, spread) {
+  let count = Math.max(1, n | 0);
+  if (count % 2 === 0) count += 1;
+  const mid = (count - 1) / 2;
+  const out = [];
+  for (let i = 0; i < count; i++) {
+    out.push(aim + (i - mid) * spread);
+  }
+  return out;
+}
+
 function shotAnglesBastiaoMulti(aim) {
   const verts = SHIP_VERTEX_SHOT_ANGLES.bastiao.map((la) => aim + la);
   return [aim, aim].concat(verts);
@@ -895,46 +929,50 @@ const SHIP_ROSTER = [
   {
     id: "lanca",
     name: "Lança",
-    blurb: "Equilibrada. Tiro padrão duplica ao acertar inimigo. T: rajada + vértices.",
+    blurb: "Equilibrada. 1 tiro reto, 200 ms, 10 de dano. T: rajada + vértices.",
     hp: 100,
     speed: 340,
     acc: 1000,
     r: 14,
-    gap: 0.12,
+    fireRateMs: 200,
+    gap: 0.2,
     shots: 1,
-    spread: 0.2,
+    spread: 0,
     bulletSpeed: 640,
-    bulletDmg: 16,
+    bulletDmg: 10,
     color: "#4de8ff",
   },
   {
     id: "dardo",
     name: "Dardo",
-    blurb: "+30% velocidade e cadência alta. Pouca vida; toma o dobro de dano. T: rajada nos vértices.",
+    blurb: "Metralhadora frágil. 80 ms, 3 de dano, projétil +50% vel. T: vértices.",
     hp: 50,
     speed: 442,
     acc: 1500,
     r: 10,
-    gap: 0.048,
+    fireRateMs: 80,
+    gap: 0.08,
     shots: 1,
     spread: 0,
-    bulletSpeed: 900,
-    bulletDmg: 15,
+    aimJitterDeg: 2,
+    bulletSpeed: 960,
+    bulletDmg: 3,
     color: "#58d4ff",
   },
   {
     id: "bastiao",
     name: "Bastião",
-    blurb: "−20% velocidade, hitbox maior, 3× vida. Espalhamento estilo shotgun. T: hex + frente.",
+    blurb: "Shotgun pesada. 5 tiros, 600 ms, 4 dano cada. Errou, espera. T: hex.",
     hp: 300,
     speed: 272,
     acc: 680,
     r: 21,
-    gap: 0.2,
+    fireRateMs: 600,
+    gap: 0.6,
     shots: 5,
     spread: 0.26,
     bulletSpeed: 500,
-    bulletDmg: 10,
+    bulletDmg: 4,
     color: "#ffb347",
   },
 ];
@@ -992,7 +1030,7 @@ class Player {
     this.color = spec.color;
     this.pilotColor = spec.color;
     this.pilotRing = "rgba(255,255,255,0.55)";
-    this.bulletDmg = spec.bulletDmg || 16;
+    this.bulletDmg = spec.bulletDmg || 10;
     this.x = x;
     this.y = y;
     this.vx = 0;
@@ -1001,7 +1039,9 @@ class Player {
     this.r = spec.r;
     this.maxSpeed = spec.speed;
     this.acc = spec.acc;
-    this.gap = spec.gap;
+    this.fireRateMs = spec.fireRateMs > 0 ? spec.fireRateMs : Math.round((spec.gap || 0.2) * 1000);
+    this.gap = this.fireRateMs / 1000;
+    this.aimJitterDeg = spec.aimJitterDeg || 0;
     this.shots = spec.shots;
     this.spread = spec.spread;
     this.bulletSpeed = spec.bulletSpeed;
