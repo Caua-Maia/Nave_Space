@@ -272,7 +272,6 @@ const EnemyPool = (() => {
       free.push(e);
     }
   }
-  warm(WARM);
   return { obtain, release, warm };
 })();
 
@@ -817,6 +816,8 @@ class Enemy {
     ctx.restore();
   }
 }
+
+if (typeof EnemyPool !== "undefined" && EnemyPool.warm) EnemyPool.warm(64);
 
 /** Perks por nave (meta survival / score). */
 const SHIP_PERKS = {

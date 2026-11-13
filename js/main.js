@@ -11,8 +11,11 @@ window.addEventListener("load", () => {
     throw new Error("Boot do jogo indisponível (scripts incompletos ou cache antigo)");
   } catch (err) {
     console.error(err);
+    const detail = err && err.message ? String(err.message).slice(0, 120) : "erro desconhecido";
     alert(
-      "Não foi possível iniciar o jogo. Use Ctrl+F5 para recarregar sem cache. Se persistir, limpe os dados do site no navegador."
+      "Não foi possível iniciar o jogo (" +
+        detail +
+        "). Use Ctrl+F5 para recarregar sem cache. Se persistir, limpe os dados do site no navegador."
     );
   }
 });
