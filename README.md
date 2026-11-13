@@ -61,6 +61,6 @@ WASD move, mouse mira, clique ou Espaço atira, Esc pausa, Enter inicia.
 
 ### Ranking e nuvem
 
-- Local: `space-survivor-save-v2` · Global: Supabase (`js/cloud.js`)
+- Local: `space-survivor-save-v3` · Global: Supabase (`js/cloud.js`)
 - Migração SQL (ordem): `docs/supabase-pilot-id.sql` → `supabase-pilot-id-rls-step3.sql` → `supabase-pilot-id-guard-step4.sql`
 - Detalhes: [docs/PILOT-ID-ETAPAS.md](docs/PILOT-ID-ETAPAS.md)

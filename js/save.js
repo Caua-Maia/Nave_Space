@@ -1,5 +1,6 @@
 const Save = (() => {
-  const KEY = "space-survivor-save-v2";
+  const KEY = "space-survivor-save-v3";
+  const OLD_KEYS = ["space-survivor-save-v2", "space-survivor-save-v1"];
   const MAX_BOARD = 10;
 
   function defaultOptions() {
@@ -114,17 +115,20 @@ const Save = (() => {
     };
   }
 
-  function load() {
+  function wipeLegacy() {
     try {
-      let raw = localStorage.getItem(KEY);
-      if (!raw) {
-        raw = localStorage.getItem("space-survivor-save-v1");
-      }
+      OLD_KEYS.forEach((k) => localStorage.removeItem(k));
+    } catch (err) {}
+  }
+
+  function load() {
+    wipeLegacy();
+    try {
+      const raw = localStorage.getItem(KEY);
       if (!raw) return blank();
       const data = JSON.parse(raw);
-      const hadPilotId = !!normalizePilotId(data.pilotId);
       const packed = packFromRaw(data);
-      if (!hadPilotId) write(packed);
+      if (!normalizePilotId(data.pilotId)) write(packed);
       return packed;
     } catch {
       return blank();

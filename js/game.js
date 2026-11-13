@@ -182,20 +182,15 @@
     armLoop();
   }
 
-  function guardUiEvent(event) {
-    event.stopPropagation();
-    if (typeof Input !== "undefined" && Input.clearPointerFire) Input.clearPointerFire();
-  }
-
   function bindUiShield() {
     if (!els.overlay) return;
-    ["pointerdown", "mousedown", "touchstart", "click"].forEach((type) => {
-      els.overlay.addEventListener(type, guardUiEvent, true);
-    });
-    els.overlay.querySelectorAll("button").forEach((btn) => {
-      btn.addEventListener("pointerdown", guardUiEvent);
-      btn.addEventListener("click", (event) => event.stopPropagation());
-    });
+    els.overlay.addEventListener(
+      "pointerdown",
+      () => {
+        if (typeof Input !== "undefined" && Input.clearPointerFire) Input.clearPointerFire();
+      },
+      true
+    );
   }
 
   function showView(name) {
