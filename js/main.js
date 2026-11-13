@@ -1,9 +1,14 @@
 window.addEventListener("load", () => {
   try {
-    if (!window.SpaceSurvivor || typeof window.SpaceSurvivor.start !== "function") {
-      throw new Error("SpaceSurvivor.start indisponível");
+    if (window.SpaceSurvivor && typeof window.SpaceSurvivor.start === "function") {
+      window.SpaceSurvivor.start();
+      return;
     }
-    window.SpaceSurvivor.start();
+    if (typeof Game !== "undefined" && typeof Game.init === "function") {
+      Game.init();
+      return;
+    }
+    throw new Error("Boot do jogo indisponível (scripts incompletos ou cache antigo)");
   } catch (err) {
     console.error(err);
     alert(

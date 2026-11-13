@@ -2903,9 +2903,7 @@
   return { init };
 })();
 
-  window.SpaceSurvivor = Object.freeze({
-    start() {
-      Game.init();
-    },
-  });
+  const boot = () => Game.init();
+  window.SpaceSurvivor = Object.freeze({ start: boot });
+  window.Game = { init: boot };
 })();

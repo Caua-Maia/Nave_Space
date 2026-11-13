@@ -1,4 +1,4 @@
-const CACHE = "space-survivor-v58";
+const CACHE = "space-survivor-v59";
 const BASE = new URL("./", self.location);
 const FILES = [
   "",
@@ -16,9 +16,11 @@ const FILES = [
   "js/settings.js",
   "js/story.js",
   "js/net.js",
+  "js/megaboss-titan.js",
   "js/megaboss-survival.js",
   "js/megaboss-prisma.js",
   "js/megaboss-orbita.js",
+  "js/easter-egg-stars.js",
   "js/game.js",
   "js/main.js",
   "manifest.json",
@@ -35,10 +37,12 @@ self.addEventListener("install", (event) => {
       .then((cache) =>
         Promise.all(
           ASSETS.map((url) =>
-            fetch(url, { cache: "reload" }).then((response) => {
-              if (!response.ok) throw new Error(url);
-              return cache.put(url, response);
-            })
+            fetch(url, { cache: "reload" })
+              .then((response) => {
+                if (!response.ok) return null;
+                return cache.put(url, response);
+              })
+              .catch(() => null)
           )
         )
       )
@@ -55,10 +59,21 @@ self.addEventListener("activate", (event) => {
   );
 });
 
+function isFreshBootAsset(url) {
+  const p = url.pathname;
+  if (p.endsWith("/")) return true;
+  return /\.(?:js|html)$/i.test(p) || p.endsWith("sw.js");
+}
+
 self.addEventListener("fetch", (event) => {
   if (event.request.method !== "GET") return;
+  const url = new URL(event.request.url);
+  if (url.origin !== self.location.origin) return;
+
+  const freshFirst = isFreshBootAsset(url);
+
   event.respondWith(
-    fetch(event.request)
+    fetch(event.request, freshFirst ? { cache: "no-cache" } : undefined)
       .then((response) => {
         if (response && response.status === 200 && response.type === "basic") {
           const copy = response.clone();

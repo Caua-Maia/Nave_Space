@@ -358,11 +358,17 @@
     <script src="js/megaboss-prisma.js?v=46"></script>
     <script src="js/megaboss-orbita.js?v=46"></script>
     <script src="js/easter-egg-stars.js?v=8"></script>
-    <script src="js/game.js?v=64"></script>
-    <script src="js/main.js?v=40"></script>
+    <script src="js/game.js?v=65"></script>
+    <script src="js/main.js?v=41"></script>
     <script>
       if ("serviceWorker" in navigator) {
-        navigator.serviceWorker.register("sw.js", { updateViaCache: "none" });
+        let swRefreshing = false;
+        navigator.serviceWorker.addEventListener("controllerchange", () => {
+          if (swRefreshing) return;
+          swRefreshing = true;
+          window.location.reload();
+        });
+        navigator.serviceWorker.register("sw.js?v=59", { updateViaCache: "none" });
       }
     </script>
   </body>
